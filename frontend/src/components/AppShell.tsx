@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { useStoreState } from "../state/useStore";
 import { Avatar } from "./Avatar";
@@ -18,7 +18,6 @@ const NAV = [
 export function AppShell() {
   const { session, logout } = useAuth();
   const { team, demoMode } = useStoreState();
-  const navigate = useNavigate();
   const me = team.find((m) => m.id === session?.userId);
 
   const demo = typeof window !== "undefined" && (new URLSearchParams(window.location.search).get("demo") === "1" || demoMode);
@@ -58,13 +57,7 @@ export function AppShell() {
             <div className="text-sm font-medium truncate">{session?.name}</div>
             <div className="text-xs text-ink-2 truncate">{session?.role}</div>
           </div>
-          <button
-            className="text-xs text-ink-2 hover:text-ink underline"
-            onClick={() => {
-              logout();
-              navigate("/login");
-            }}
-          >
+          <button className="text-xs text-ink-2 hover:text-ink underline" onClick={logout}>
             Log out
           </button>
         </div>

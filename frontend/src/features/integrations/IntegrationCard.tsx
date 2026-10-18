@@ -1,10 +1,26 @@
+import { useState } from "react";
 import { store } from "../../state/useStore";
 import { Card, Button } from "../../components/Primitives";
 import { StatusChip, type ChipKind } from "../../components/StatusChip";
+import { SecretInput } from "../../components/SecretInput";
 import { relativeTime } from "../../lib/format";
+import { useToast } from "../../state/ToastContext";
 import type { Integration } from "../../mock/types";
+import { WebhookUrl } from "./WebhookUrl";
 
 export function IntegrationCard({ integration, canManage }: { integration: Integration; canManage: boolean }) {
+  const { push } = useToast();
+  const [connecting, setConnecting] = useState(false);
+
+  async function saveCredential(_value: string) {
+    // Mock mode never sends the plaintext secret anywhere — a real backend
+    // would receive it over TLS and store it server-side only.
+    await new Promise((r) => setTimeout(r, 300));
+    store.reconnectIntegration(integration.key);
+    setConnecting(false);
+    push(`${integration.name} connected.`);
+  }
+
   return (
     <Card className="p-4 flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -34,12 +50,19 @@ export function IntegrationCard({ integration, canManage }: { integration: Integ
           </>
         )}
       </dl>
+
+      {integration.status === "connected" && <WebhookUrl integrationKey={integration.key} />}
+
       {canManage ? (
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex flex-col gap-2">
           {integration.status === "connected" ? (
-            <Button variant="secondary" onClick={() => store.disconnectIntegration(integration.key)}>Disconnect</Button>
+            <Button variant="secondary" onClick={() => store.disconnectIntegration(integration.key)} className="self-start">
+              Disconnect
+            </Button>
+          ) : connecting ? (
+            <SecretInput label={`${integration.name} API key`} savingLabel="Connecting…" onSave={saveCredential} />
           ) : (
-            <Button onClick={() => store.reconnectIntegration(integration.key)}>
+            <Button onClick={() => setConnecting(true)} className="self-start">
               {integration.status === "needs_reconnect" ? "Reconnect" : "Connect"}
             </Button>
           )}

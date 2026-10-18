@@ -65,8 +65,8 @@ export const messages: Message[] = [
 ];
 
 export const payments: Payment[] = [
-  { id: "p-1", contactId: "c-001", amountCents: 50000, status: "pending", url: "https://pay.leadguard.app/lnk/8f2a", createdAt: minutesAgo(9), memo: "Deposit — roof replacement" },
-  { id: "p-2", contactId: "c-003", amountCents: 226000 * 10, status: "paid", url: "https://pay.leadguard.app/lnk/a913", createdAt: minutesAgo(600), memo: "Final payment — re-roof" },
+  { id: "p-1", contactId: "c-001", amountCents: 50000, status: "pending", url: "https://checkout.stripe.com/c/pay/cs_test_8f2a", createdAt: minutesAgo(9), memo: "Deposit — roof replacement" },
+  { id: "p-2", contactId: "c-003", amountCents: 226000 * 10, status: "paid", url: "https://checkout.stripe.com/c/pay/cs_test_a913", createdAt: minutesAgo(600), memo: "Final payment — re-roof" },
 ];
 
 export const appointments: Appointment[] = [

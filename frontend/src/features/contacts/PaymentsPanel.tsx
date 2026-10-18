@@ -4,6 +4,7 @@ import { Button, FormField, Input, Card } from "../../components/Primitives";
 import { StatusChip, type ChipKind } from "../../components/StatusChip";
 import { money, clock } from "../../lib/format";
 import { useToast } from "../../state/ToastContext";
+import { ExternalLink } from "../../components/ExternalLink";
 
 export function PaymentsPanel({ contactId }: { contactId: string }) {
   const { payments } = useStoreState();
@@ -56,6 +57,9 @@ export function PaymentsPanel({ contactId }: { contactId: string }) {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <StatusChip kind={p.status as ChipKind} />
+                  <ExternalLink href={p.url} className="text-xs underline underline-offset-2 text-ink-2 hover:text-ink h-9 px-1">
+                    Open
+                  </ExternalLink>
                   <button onClick={() => copy(p.url, p.id)} className="text-xs underline underline-offset-2 text-ink-2 hover:text-ink h-9 px-1">
                     {copiedId === p.id ? "Copied!" : "Copy link"}
                   </button>

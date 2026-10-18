@@ -1,13 +1,16 @@
 import { useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../state/AuthContext";
 import { Button, FormField, Input } from "../../components/Primitives";
 import { AuthLayout } from "./AuthLayout";
+import { SessionExpiredDialog } from "../../components/SessionExpiredDialog";
+import { isSafeReturnTo } from "../../lib/safeUrl";
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("owais@leadguard.app");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +21,18 @@ export default function Login() {
   const throttled = throttleUntil !== null && throttleUntil > Date.now();
   const retrySeconds = throttled ? Math.ceil((throttleUntil! - Date.now()) / 1000) : 0;
 
+  // ?returnTo= comes from clearSession()'s redirect and is URL-controlled,
+  // so it goes through isSafeReturnTo before it's ever used for navigation.
+  const returnToParam = searchParams.get("returnTo");
+  const sessionExpired = isSafeReturnTo(returnToParam);
+
+  function destination(): string {
+    if (isSafeReturnTo(returnToParam)) return returnToParam;
+    const from = (location.state as { from?: string } | null)?.from;
+    if (isSafeReturnTo(from)) return from;
+    return "/relay";
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (throttled) return;
@@ -26,8 +41,7 @@ export default function Login() {
     const result = await login(email, password);
     setSubmitting(false);
     if (result.ok) {
-      const from = (location.state as { from?: string } | null)?.from ?? "/relay";
-      navigate(from, { replace: true });
+      navigate(destination(), { replace: true });
       return;
     }
     const nextAttempts = attempts + 1;
@@ -42,9 +56,10 @@ export default function Login() {
 
   return (
     <AuthLayout title="Sign in" subtitle="Welcome back — let's get leads answered.">
+      {sessionExpired && <SessionExpiredDialog />}
       <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
         <FormField label="Email" htmlFor="email">
-          <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input id="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </FormField>
         <FormField label="Password" htmlFor="password" error={error ?? undefined}>
           <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />

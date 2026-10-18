@@ -31,7 +31,7 @@ export default function Signup() {
           <Input id="name" required autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
         </FormField>
         <FormField label="Workspace name" htmlFor="workspace" hint="Your company or team name — shown to your team.">
-          <Input id="workspace" required value={workspace} onChange={(e) => setWorkspace(e.target.value)} placeholder="Acme Roofing" />
+          <Input id="workspace" required autoComplete="organization" value={workspace} onChange={(e) => setWorkspace(e.target.value)} placeholder="Acme Roofing" />
         </FormField>
         <FormField label="Work email" htmlFor="email" error={error ?? undefined}>
           <Input id="email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />

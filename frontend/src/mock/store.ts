@@ -27,6 +27,7 @@ import type {
   TeamMember,
   TimelineEvent,
 } from "./types";
+import type { StoreLike } from "../state/storeTypes";
 
 export type RealtimeEvent =
   | { type: "lead.created"; leadId: string }
@@ -38,7 +39,7 @@ export type RealtimeEvent =
   | { type: "stream.reconnecting" }
   | { type: "stream.online" };
 
-interface State {
+export interface State {
   team: TeamMember[];
   leads: Lead[];
   stages: StageDef[];
@@ -61,7 +62,7 @@ function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-class Store {
+export class Store implements StoreLike {
   private state: State;
   private listeners = new Set<Listener>();
   private eventListeners = new Set<(e: RealtimeEvent) => void>();
@@ -165,6 +166,31 @@ class Store {
       };
     });
     if (changed) this.set({ leads });
+  }
+
+  // ---- auth (mock only — see api/realStore.ts for the real-backend path) ----
+  async login(email: string, password: string): ReturnType<StoreLike["login"]> {
+    await new Promise((r) => setTimeout(r, 450));
+    if (!password || password.length < 4) {
+      return { ok: false, error: "Incorrect email or password." };
+    }
+    const member = this.state.team.find((m) => m.id === "u-imran");
+    if (!member) return { ok: false, error: "That account couldn't be found." };
+    return {
+      ok: true,
+      session: { userId: member.id, name: member.name, email, role: member.role, workspace: "LeadGuard Roofing" },
+    };
+  }
+
+  async signup(name: string, email: string, _password: string, workspace: string): ReturnType<StoreLike["signup"]> {
+    await new Promise((r) => setTimeout(r, 450));
+    if (email.toLowerCase() === "taken@leadguard.app") {
+      return { ok: false, error: "That email is already in use on another workspace." };
+    }
+    return {
+      ok: true,
+      session: { userId: "u-owais", name, email, role: "Owner", workspace: workspace || "My Roofing Co." },
+    };
   }
 
   // ---- actions ----
@@ -273,7 +299,7 @@ class Store {
       contactId,
       amountCents,
       status: "pending",
-      url: `https://pay.leadguard.app/lnk/${Math.random().toString(36).slice(2, 8)}`,
+      url: `https://checkout.stripe.com/c/pay/cs_test_${Math.random().toString(36).slice(2, 8)}`,
       createdAt: new Date().toISOString(),
       memo,
     };

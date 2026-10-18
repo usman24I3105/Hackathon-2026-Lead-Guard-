@@ -4,8 +4,9 @@ import { useAuth } from "../../state/AuthContext";
 import { has } from "../../lib/perm";
 import { Button, Card, FormField, Input, Select } from "../../components/Primitives";
 import { useToast } from "../../state/ToastContext";
+import ChangePassword from "../auth/ChangePassword";
 
-const TABS = ["Stages", "Custom fields", "Assignment", "Team", "My notifications"] as const;
+const TABS = ["Stages", "Custom fields", "Assignment", "Team", "My notifications", "Security"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function Settings() {
@@ -36,7 +37,7 @@ export default function Settings() {
         ))}
       </div>
 
-      {!canManage && tab !== "My notifications" && (
+      {!canManage && tab !== "My notifications" && tab !== "Security" && (
         <p className="text-sm text-ink-2 mb-4">You need the "Manage settings" permission to change this — showing read-only.</p>
       )}
 
@@ -45,6 +46,7 @@ export default function Settings() {
       {tab === "Assignment" && <AssignmentTab canManage={canManage} />}
       {tab === "Team" && <TeamTab canManage={canManage} />}
       {tab === "My notifications" && <NotificationsTab />}
+      {tab === "Security" && <ChangePassword />}
     </div>
   );
 }
