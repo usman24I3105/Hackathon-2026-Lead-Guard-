@@ -152,7 +152,19 @@ authRoutes.post('/login', loginRateLimit, async (req, res, next) => {
 
     writeSecurityEvent({ type: 'login_ok', req, userId: user.id, workspaceId: user.workspace_id }).catch(() => {});
 
-    res.json({ userId: user.id, workspaceId: user.workspace_id, name: user.name, role: user.role });
+    res.json({
+      userId: user.id,
+      workspaceId: user.workspace_id,
+      name: user.name,
+      role: user.role,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        workspaceId: user.workspace_id,
+      },
+    });
   } catch (err) {
     next(err);
   }

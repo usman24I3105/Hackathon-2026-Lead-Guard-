@@ -63,22 +63,31 @@ class RealStore implements StoreLike {
   async login(email: string, password: string): Promise<AuthResult> {
     try {
       const res = await apiFetch<{
-        ok: boolean;
-        user: { id: string; email: string; name: string; role: string; permissions: string[]; workspaceId: string };
+        ok?: boolean;
+        userId?: string;
+        workspaceId?: string;
+        name?: string;
+        role?: string;
+        user?: { id: string; email: string; name: string; role: string; permissions: string[]; workspaceId: string };
       }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      if (res?.user) {
-        const role = res.user.role === "owner" ? "Owner" : res.user.role === "admin" ? "Admin" : "User";
+      const userId = res.user?.id ?? res.userId;
+      const name = res.user?.name ?? res.name ?? email;
+      const roleRaw = res.user?.role ?? res.role ?? "user";
+      const workspace = res.user?.workspaceId ?? res.workspaceId ?? "default";
+
+      if (userId) {
+        const role = roleRaw === "owner" ? "Owner" : roleRaw === "admin" ? "Admin" : "User";
         return {
           ok: true,
           session: {
-            userId: res.user.id,
-            name: res.user.name,
-            email: res.user.email,
+            userId,
+            name,
+            email,
             role: role as any,
-            workspace: res.user.workspaceId,
+            workspace,
           },
         };
       }

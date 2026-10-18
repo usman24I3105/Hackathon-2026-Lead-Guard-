@@ -5,7 +5,7 @@ import { apiFetch } from "../api/client";
 
 interface AuthCtx {
   session: Session | null;
-  login: (email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  login: (email: string, password: string) => Promise<{ ok: true; session: Session } | { ok: false; error: string }>;
   signup: (name: string, email: string, password: string, workspace: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   logout: () => void;
 }
@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const result = await store.login(email, password);
         if (!result.ok) return result;
         setSession(result.session);
-        return { ok: true };
+        return { ok: true, session: result.session };
       },
       signup: async (name, email, password, workspace) => {
         const result = await store.signup(name, email, password, workspace);

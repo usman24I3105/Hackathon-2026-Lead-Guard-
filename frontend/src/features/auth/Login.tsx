@@ -24,13 +24,13 @@ export default function Login() {
   // ?returnTo= comes from clearSession()'s redirect and is URL-controlled,
   // so it goes through isSafeReturnTo before it's ever used for navigation.
   const returnToParam = searchParams.get("returnTo");
-  const sessionExpired = isSafeReturnTo(returnToParam);
+  const sessionExpired = isSafeReturnTo(returnToParam) && returnToParam !== "/login";
 
-  function destination(): string {
-    if (isSafeReturnTo(returnToParam)) return returnToParam;
+  function destination(role?: string): string {
+    if (isSafeReturnTo(returnToParam) && returnToParam !== "/login") return returnToParam;
     const from = (location.state as { from?: string } | null)?.from;
-    if (isSafeReturnTo(from)) return from;
-    return "/relay";
+    if (isSafeReturnTo(from) && from !== "/login") return from;
+    return role === "User" ? "/relay" : "/dashboard";
   }
 
   async function onSubmit(e: FormEvent) {
@@ -41,7 +41,7 @@ export default function Login() {
     const result = await login(email, password);
     setSubmitting(false);
     if (result.ok) {
-      navigate(destination(), { replace: true });
+      navigate(destination(result.session.role), { replace: true });
       return;
     }
     const nextAttempts = attempts + 1;
