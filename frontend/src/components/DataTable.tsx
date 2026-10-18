@@ -6,6 +6,8 @@ export interface Column<T> {
   header: string;
   render: (row: T) => ReactNode;
   align?: "left" | "right";
+  width?: string;
+  sortDirection?: "ascending" | "descending" | "none";
 }
 
 export function DataTable<T extends { id: string }>({
@@ -30,25 +32,25 @@ export function DataTable<T extends { id: string }>({
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-2 p-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-10 w-full" />
-        ))}
+      <div className="data-table-card" aria-label="Loading results">
+        <table className="w-full text-sm"><thead><tr>{columns.map((column) => <th key={column.key} scope="col" style={{ width: column.width }}><Skeleton className="h-3 w-20" /></th>)}</tr></thead>
+          <tbody>{Array.from({ length: 6 }).map((_, index) => <tr key={index}>{columns.map((column) => <td key={column.key}><Skeleton className="h-4 w-3/4" /></td>)}</tr>)}</tbody>
+        </table>
       </div>
     );
   }
 
   if (!rows.length) {
-    return <EmptyState title={emptyTitle} body={emptyBody} />;
+    return <div className="data-table-card"><EmptyState title={emptyTitle} body={emptyBody} /></div>;
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="data-table-card overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-surface">
+        <thead>
           <tr className="border-b border-line">
             {columns.map((c) => (
-              <th key={c.key} className={`py-2.5 px-3 font-medium text-ink-2 text-xs uppercase tracking-wide ${c.align === "right" ? "text-right" : "text-left"}`}>
+              <th key={c.key} scope="col" aria-sort={c.sortDirection ?? "none"} className={`${c.align === "right" ? "text-right" : "text-left"}`} style={{ width: c.width }}>
                 {c.header}
               </th>
             ))}
@@ -56,9 +58,9 @@ export function DataTable<T extends { id: string }>({
         </thead>
         <tbody>
           {slice.map((row) => (
-            <tr key={row.id} className="border-b border-line/70 hover:bg-paper/60">
+              <tr key={row.id} className="hover:bg-paper/60">
               {columns.map((c) => (
-                <td key={c.key} className={`py-2.5 px-3 ${c.align === "right" ? "text-right" : "text-left"}`}>
+                <td key={c.key} data-label={c.header} className={c.align === "right" ? "text-right tabular-nums" : "text-left"}>
                   {c.render(row)}
                 </td>
               ))}
@@ -66,11 +68,9 @@ export function DataTable<T extends { id: string }>({
           ))}
         </tbody>
       </table>
-      {rows.length > pageSize && (
-        <div className="flex items-center justify-between px-3 py-3 text-sm text-ink-2">
-          <span>
-            {current * pageSize + 1}–{Math.min(rows.length, (current + 1) * pageSize)} of {rows.length}
-          </span>
+      <div className="data-table-footer flex items-center justify-between border-t border-border px-3 py-3 text-sm text-ink-2" aria-live="polite">
+          <span>Showing {current * pageSize + 1}–{Math.min(rows.length, (current + 1) * pageSize)} of {rows.length}</span>
+          {rows.length > pageSize && (
           <div className="flex gap-2">
             <button
               className="px-3 h-9 rounded-card border border-line disabled:opacity-40"
@@ -87,8 +87,8 @@ export function DataTable<T extends { id: string }>({
               Next
             </button>
           </div>
-        </div>
-      )}
+          )}
+      </div>
     </div>
   );
 }

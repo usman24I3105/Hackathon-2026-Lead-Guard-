@@ -8,7 +8,8 @@ export function useDismiss(
   open: boolean,
   ref: RefObject<HTMLElement | null>,
   onClose: () => void,
-  returnFocusRef?: RefObject<HTMLElement | null>
+  returnFocusRef?: RefObject<HTMLElement | null>,
+  portaledRef?: RefObject<HTMLElement | null>
 ) {
   useEffect(() => {
     if (!open) return;
@@ -18,7 +19,9 @@ export function useDismiss(
       returnFocusRef?.current?.focus();
     };
     const onPointer = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || portaledRef?.current?.contains(target)) return;
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPointer);
@@ -26,5 +29,5 @@ export function useDismiss(
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPointer);
     };
-  }, [open, ref, onClose, returnFocusRef]);
+  }, [open, ref, onClose, returnFocusRef, portaledRef]);
 }

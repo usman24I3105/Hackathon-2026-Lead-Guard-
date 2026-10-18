@@ -23,7 +23,7 @@ export const NAV_GROUPS: NavGroup[] = [
 export const NAV_ITEMS: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: "dashboard", group: "Overview", perm: "dashboard.full" },
   { to: "/relay", label: "Live relay", icon: "leads", group: "Customer management", perm: "leads.view" },
-  { to: "/leads", label: "Lead records", icon: "activity", group: "Customer management", perm: "leads.view" },
+  { to: "/leads", label: "Lead records", icon: "list", group: "Customer management", perm: "leads.view" },
   { to: "/recovery", label: "Recovery queue", icon: "recovery", group: "Customer management", perm: "leads.view" },
   { to: "/contacts", label: "Contacts", icon: "contacts", group: "Customer management", perm: "contacts.view" },
   { to: "/companies", label: "Companies", icon: "companies", group: "Customer management", perm: "contacts.view" },

@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { Icon, ShieldLogo } from "../icons";
-import { Avatar } from "../Avatar";
+import { UserMenu } from "./UserMenu";
 import { NAV_GROUPS, type NavItem } from "./nav";
 import type { Availability } from "../../mock/types";
 
@@ -10,12 +10,18 @@ export function Sidebar({
   onLogout,
   collapsed,
   onToggleCollapsed,
+  relayCount = 0,
+  recoveryCount = 0,
+  conversationCount = 0,
 }: {
   items: NavItem[];
   user: { name: string; role: string; avatarColor?: string; availability?: Availability } | null;
   onLogout: () => void;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  relayCount?: number;
+  recoveryCount?: number;
+  conversationCount?: number;
 }) {
   const groups = NAV_GROUPS.map((group) => ({
     group,
@@ -48,16 +54,26 @@ export function Sidebar({
                 <li key={item.to}>
                   <NavLink
                     to={item.to}
-                    title={collapsed ? item.label : undefined}
-                    aria-label={collapsed ? item.label : undefined}
+                    title={collapsed ? `${item.label}${item.to === "/relay" && relayCount ? ` · ${relayCount} need attention` : ""}` : undefined}
+                    aria-label={collapsed ? `${item.label}${item.to === "/relay" && relayCount ? `, ${relayCount} need attention` : ""}` : undefined}
                     className={({ isActive }) =>
-                      `sidebar-link relative flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} h-10 rounded-control text-sm font-medium transition-colors duration-150 ${
+                      `sidebar-link ${item.to === "/relay" ? "is-relay-link" : ""} relative flex items-center ${collapsed ? "justify-center px-2" : "gap-3 px-3"} h-10 rounded-control text-sm font-medium transition-colors duration-150 ${
                         isActive ? "bg-primary-soft text-primary before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-primary" : "text-text-muted hover:bg-neutral-bg hover:text-text"
                       }`
                     }
                   >
                     <Icon name={item.icon} size={18} />
                     {!collapsed && <span className="truncate">{item.label}</span>}
+                    {item.to === "/relay" && relayCount > 0 && (
+                      <span className={"sidebar-count" + (collapsed ? " is-collapsed" : "")} aria-hidden="true">
+                        {relayCount > 99 ? "99+" : relayCount}
+                      </span>
+                    )}
+                    {(item.to === "/recovery" ? recoveryCount : item.to === "/conversations" ? conversationCount : 0) > 0 && (
+                      <span className={"sidebar-count" + (collapsed ? " is-collapsed" : "")} aria-hidden="true">
+                        {(item.to === "/recovery" ? recoveryCount : conversationCount) > 99 ? "99+" : item.to === "/recovery" ? recoveryCount : conversationCount}
+                      </span>
+                    )}
                   </NavLink>
                 </li>
               ))}
@@ -67,21 +83,8 @@ export function Sidebar({
       </nav>
 
       {user && (
-        <div className={`sidebar-user p-3 border-t flex items-center shrink-0 ${collapsed ? "justify-center" : "gap-2.5"}`}>
-          <Avatar name={user.name} color={user.avatarColor ?? "var(--neutral-text)"} availability={user.availability} title={user.name} />
-          {!collapsed && <div className="flex-1 min-w-0">
-              <div className="sidebar-user-name text-sm font-medium truncate">{user.name}</div>
-              <div className="sidebar-user-role text-xs truncate">{user.role}</div>
-            </div>}
-          <button
-            type="button"
-            onClick={onLogout}
-            aria-label="Log out"
-            title="Log out"
-            className="h-9 w-9 flex items-center justify-center rounded-control text-text-muted hover:bg-neutral-bg hover:text-text"
-          >
-            <Icon name="logout" size={18} />
-          </button>
+        <div className="sidebar-user shrink-0 border-t p-3">
+          <UserMenu user={user} onLogout={onLogout} placement="sidebar" collapsed={collapsed} />
         </div>
       )}
     </aside>

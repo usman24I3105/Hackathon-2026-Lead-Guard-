@@ -1,9 +1,10 @@
+import { Link } from "react-router-dom";
 import { useAuth } from "../../state/AuthContext";
-import { store, useStoreState } from "../../state/useStore";
+import { useStoreState } from "../../state/useStore";
 import { Avatar } from "../../components/Avatar";
-import type { Availability } from "../../mock/types";
-
-const OPTIONS: Availability[] = ["available", "busy", "leave", "offline"];
+import { Icon } from "../../components/icons";
+import { AvailabilityMenu } from "./RelayUi";
+import { availabilityText } from "./relayFormat";
 
 export function TeamStrip() {
   const { team, leads } = useStoreState();
@@ -14,44 +15,48 @@ export function TeamStrip() {
     <section className="relay-roster" aria-labelledby="relay-roster-title">
       <div className="relay-roster-heading">
         <div>
-          <h2 id="relay-roster-title">On shift</h2>
-          <p>{available} of {team.length} available</p>
+          <h2 id="relay-roster-title">Team availability</h2>
+          <p>{available} of {team.length} ready to receive a lead</p>
+        </div>
+        <div className="relay-roster-heading-actions">
+          <Link to="/team" className="relay-team-manage-link" aria-label="Manage team availability" title="Manage team availability">
+            Manage <Icon name="arrow-right" size={14} />
+          </Link>
         </div>
       </div>
-      <ul className="relay-roster-list">
-        {team.map((member) => {
-          const activeCount = leads.filter((lead) => lead.ownerId === member.id && (lead.status === "waiting" || lead.status === "escalated")).length;
-          const isMe = member.id === session?.userId;
-          return (
-            <li key={member.id} className="relay-roster-member">
-              <Avatar name={member.name} color={member.avatarColor} size={36} availability={member.availability} title={`${member.name} · ${member.availability}`} />
-              <div className="relay-roster-person">
-                <span className="relay-roster-name">{member.name.split(" ")[0]}{isMe ? <span className="relay-you">You</span> : null}</span>
-                {isMe ? (
-                  <label className="relay-availability-label">
-                    <span className="sr-only">Your availability</span>
-                    <select
-                      aria-label="Your availability"
-                      value={member.availability}
-                      onChange={(event) => store.setAvailability(member.id, event.target.value as Availability)}
-                    >
-                      {OPTIONS.map((option) => (
-                        <option key={option} value={option}>{option === "leave" ? "On leave" : option[0].toUpperCase() + option.slice(1)}</option>
-                      ))}
-                    </select>
-                    <span className={`relay-availability-dot is-${member.availability}`} aria-hidden="true" />
-                  </label>
-                ) : (
-                  <span className="relay-roster-status"><span className={`relay-availability-dot is-${member.availability}`} aria-hidden="true" />{member.availability === "leave" ? "On leave" : member.availability[0].toUpperCase() + member.availability.slice(1)}</span>
-                )}
-              </div>
-              <span className="relay-roster-workload" aria-label={`${activeCount} active leads`}>
-                <strong>{activeCount}</strong><span>{activeCount === 1 ? "lead" : "leads"}</span>
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      {team.length ? (
+        <ul className="relay-roster-list" aria-label="Team members and current workloads">
+          {team.map((member) => {
+            const activeCount = leads.filter((lead) => lead.ownerId === member.id && (lead.status === "waiting" || lead.status === "escalated")).length;
+            const isMe = member.id === session?.userId;
+            const statusClass = member.availability === "available" ? "available" : member.availability === "busy" ? "busy" : "away";
+            return (
+              <li key={member.id} className="relay-roster-member">
+                <Avatar name={member.name} color={member.avatarColor} size={36} availability={member.availability} title={member.name + " · " + availabilityText(member.availability)} />
+                <div className="relay-roster-person">
+                  <div className="relay-roster-name" title={member.name}>
+                    <span>{member.name}</span>
+                    {isMe && <span className="relay-you">You</span>}
+                  </div>
+                  {isMe ? (
+                    <AvailabilityMenu memberId={member.id} availability={member.availability} />
+                  ) : (
+                    <span className={`relay-roster-status is-${statusClass}`}>
+                      <span className={"relay-availability-dot is-" + member.availability} aria-hidden="true" />
+                      {availabilityText(member.availability)}
+                    </span>
+                  )}
+                </div>
+                <span className="relay-workload-chip" aria-label={activeCount + " active leads"}>
+                  <strong>{activeCount}</strong><span>active</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="relay-roster-empty">Team availability will appear here when teammates are added.</div>
+      )}
     </section>
   );
 }

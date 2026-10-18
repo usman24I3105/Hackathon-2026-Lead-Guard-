@@ -3,54 +3,49 @@ import { store, useStoreState } from "../../state/useStore";
 import { useAuth } from "../../state/AuthContext";
 import { has } from "../../lib/perm";
 import { Button, Card, FormField, Input, Select } from "../../components/Primitives";
+import { Icon, type IconName } from "../../components/icons";
+import { Notice, PageHeader } from "../../components/DesignSystem";
 import { useToast } from "../../state/ToastContext";
 import ChangePassword from "../auth/ChangePassword";
 import type { Permission, Role } from "../../lib/perm";
 
 const TABS = ["Stages", "Custom fields", "Assignment", "Team", "Roles & permissions", "My notifications", "Security"] as const;
 type Tab = (typeof TABS)[number];
+const TAB_ICONS: Record<Tab, IconName> = { "Stages": "pipeline", "Custom fields": "list", "Assignment": "leads", "Team": "team", "Roles & permissions": "shield", "My notifications": "bell", "Security": "lock" };
 
-export default function Settings() {
+export default function Settings({ navPosition = "right" }: { navPosition?: "right" | "left" } = {}) {
   const [tab, setTab] = useState<Tab>("Stages");
   const { session } = useAuth();
   const canManage = !session || has({ role: session.role }, "settings.manage");
 
+  const readonlySection = !canManage && tab !== "My notifications" && tab !== "Security";
   return (
-    <div className="p-4 sm:p-6 max-w-3xl">
-      <header className="mb-5">
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="text-sm text-ink-2">Configure LeadGuard without code.</p>
-      </header>
-
-      <div role="tablist" aria-label="Settings sections" className="flex gap-1 border-b border-line mb-5 overflow-x-auto">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => setTab(t)}
-            className={`px-3.5 h-10 text-sm font-medium whitespace-nowrap border-b-2 -mb-px ${
-              tab === t ? "border-ink text-ink" : "border-transparent text-ink-2"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+    <div className="page-content settings-page">
+      <PageHeader eyebrow="Configuration" title="Workspace settings" subtitle="Configure LeadGuard for your team." />
+      {readonlySection && <Notice variant="restricted" className="mb-4" title="Read-only">Manage settings permission is required to make changes.</Notice>}
+      <div className="settings-layout" data-nav-position={navPosition}>
+        <div className="settings-main-column" role="tabpanel" aria-label={tab}>
+          {tab === "Stages" && <StagesTab canManage={canManage} />}
+          {tab === "Custom fields" && <FieldsTab canManage={canManage} />}
+          {tab === "Assignment" && <AssignmentTab canManage={canManage} />}
+          {tab === "Team" && <TeamTab canManage={canManage} />}
+          {tab === "Roles & permissions" && <AccessTab />}
+          {tab === "My notifications" && <NotificationsTab />}
+          {tab === "Security" && <ChangePassword />}
+        </div>
+        <SettingsNavigation navPosition={navPosition} tab={tab} onChange={setTab} />
       </div>
-
-      {!canManage && tab !== "My notifications" && tab !== "Security" && (
-        <p className="text-sm text-ink-2 mb-4">You need the "Manage settings" permission to change this — showing read-only.</p>
-      )}
-
-      {tab === "Stages" && <StagesTab canManage={canManage} />}
-      {tab === "Custom fields" && <FieldsTab canManage={canManage} />}
-      {tab === "Assignment" && <AssignmentTab canManage={canManage} />}
-      {tab === "Team" && <TeamTab canManage={canManage} />}
-      {tab === "Roles & permissions" && <AccessTab />}
-      {tab === "My notifications" && <NotificationsTab />}
-      {tab === "Security" && <ChangePassword />}
     </div>
   );
+}
+
+function SettingsNavigation({ navPosition, tab, onChange }: { navPosition: "right" | "left"; tab: Tab; onChange: (tab: Tab) => void }) {
+  return <aside className="settings-nav-card" data-position={navPosition} aria-label="Settings sections">
+    <label className="settings-mobile-label" htmlFor="settings-section">Settings section</label>
+    <Select id="settings-section" className="settings-mobile-select" value={tab} onChange={(event) => onChange(event.target.value as Tab)}>{TABS.map((item) => <option key={item} value={item}>{item}</option>)}</Select>
+    <div className="settings-nav-group"><p>Workspace</p>{TABS.slice(0, 5).map((item) => <button key={item} type="button" aria-current={tab === item ? "page" : undefined} onClick={() => onChange(item)}><Icon name={TAB_ICONS[item]} size={16} /><span>{item}</span></button>)}</div>
+    <div className="settings-nav-group"><p>Personal</p>{TABS.slice(5).map((item) => <button key={item} type="button" aria-current={tab === item ? "page" : undefined} onClick={() => onChange(item)}><Icon name={TAB_ICONS[item]} size={16} /><span>{item}</span></button>)}</div>
+  </aside>;
 }
 
 function StagesTab({ canManage }: { canManage: boolean }) {
@@ -96,14 +91,15 @@ function StagesTab({ canManage }: { canManage: boolean }) {
       {stages.map((s, index) => {
         const count = opportunities.filter((o) => o.stageId === s.id).length;
         return (
-          <Card key={s.id} className="p-3 flex flex-col gap-3">
+          <Card key={s.id} className="stage-setting-card flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
+              <span className="stage-drag-handle" aria-hidden="true" title="Reorder with the arrow controls"><Icon name="menu" size={16} /></span>
               <Input
                 defaultValue={s.name}
                 disabled={!canManage}
                 aria-label={`Stage name for ${s.name}`}
                 onBlur={(e) => e.target.value.trim() && e.target.value !== s.name && store.renameStage(s.id, e.target.value.trim())}
-                className="min-w-36 flex-1"
+                className="stage-name-edit min-w-36 flex-1"
               />
               <span className="text-xs text-ink-2 shrink-0">{count} opportunit{count === 1 ? "y" : "ies"}</span>
               <Select aria-label={`Stage type for ${s.name}`} disabled={!canManage} value={s.isClosed ? "closed" : "open"} onChange={(e) => updateStageConfig(s.id, { isClosed: e.target.value === "closed" })} className="w-auto">
@@ -115,9 +111,9 @@ function StagesTab({ canManage }: { canManage: boolean }) {
                 <button type="button" onClick={() => requestDelete(s.id, s.name)} className="h-9 px-2 text-xs text-alarm underline shrink-0">Delete</button>
               </div>}
             </div>
-            {customFields.length > 0 && <fieldset className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-2">
+            {customFields.length > 0 && <fieldset className="stage-required">
               <legend className="px-1 text-xs font-medium text-ink-2">Required to enter this stage</legend>
-              {customFields.map((field) => <label key={field.id} className="inline-flex min-h-8 items-center gap-2 text-xs text-text"><input type="checkbox" checked={s.requiredFields.includes(field.label)} disabled={!canManage} onChange={(event) => updateStageConfig(s.id, { requiredFields: event.target.checked ? [...s.requiredFields, field.label] : s.requiredFields.filter((name) => name !== field.label) })} />{field.label}</label>)}
+              {customFields.map((field) => <label key={field.id}><input type="checkbox" checked={s.requiredFields.includes(field.label)} disabled={!canManage} onChange={(event) => updateStageConfig(s.id, { requiredFields: event.target.checked ? [...s.requiredFields, field.label] : s.requiredFields.filter((name) => name !== field.label) })} />{field.label}</label>)}
             </fieldset>}
           </Card>
         );
@@ -125,7 +121,7 @@ function StagesTab({ canManage }: { canManage: boolean }) {
 
       {canManage && (
         <form
-          className="flex gap-2 mt-2"
+          className="settings-add-stage"
           onSubmit={(e) => {
             e.preventDefault();
             if (!newStage.trim()) return;

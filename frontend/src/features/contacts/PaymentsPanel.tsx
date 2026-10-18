@@ -1,7 +1,9 @@
 import { useRef, useState, type FormEvent } from "react";
 import { store, useStoreState } from "../../state/useStore";
 import { Button, FormField, Input, Card } from "../../components/Primitives";
-import { StatusChip, type ChipKind } from "../../components/StatusChip";
+import { Notice, StatusBadge, Tooltip } from "../../components/DesignSystem";
+import { Icon } from "../../components/icons";
+import { EmptyState } from "../../components/Primitives";
 import { money, clock } from "../../lib/format";
 import { useToast } from "../../state/ToastContext";
 import { ExternalLink } from "../../components/ExternalLink";
@@ -54,28 +56,28 @@ export function PaymentsPanel({ contactId }: { contactId: string }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink-2 uppercase tracking-wide">Payments</h3>
-        <Button variant="secondary" onClick={() => setOpen(true)} disabled={!canManage || !stripeReady}>+ Payment link</Button>
+        <h3 className="text-sm font-semibold text-text">Payments</h3>
+        {canManage && stripeReady ? <Button variant="secondary" leadingIcon={<Icon name="plus" size={14} />} onClick={() => setOpen(true)}>Payment link</Button> : <Tooltip content={!canManage ? "You need payments.manage permission to create payment links" : "Connect Stripe to create a payment link"}><span><Button variant="secondary" disabled>Payment link</Button></span></Tooltip>}
       </div>
-      {!canManage && <p className="text-xs text-text-muted">Payment actions and values are restricted for your role.</p>}
-      {canManage && !stripeReady && <p className="text-xs text-warning-text">Connect Stripe before creating a payment link. <Link to="/integrations" className="underline">Manage integrations</Link></p>}
+      {!canManage && <Notice variant="restricted">Payment actions and values are restricted for your role.</Notice>}
+      {canManage && !stripeReady && <Notice variant="warning" action={<Link to="/integrations" className="ui-button ui-button--secondary ui-button--sm">Manage integrations</Link>}>Connect Stripe before creating a payment link.</Notice>}
 
       {list.length === 0 ? (
-        <p className="text-sm text-ink-2">No payment links yet.</p>
+        <EmptyState title="No payment links yet" body="Payment links for this contact will appear here." />
       ) : (
         <ul className="flex flex-col gap-2">
           {list.map((p) => (
             <li key={p.id}>
               <Card className="p-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="font-mono-tab text-sm">{canSeeAmount ? money(p.amountCents) : "••••"}</div>
+                  <div className="font-mono-tab text-sm">{canSeeAmount ? money(p.amountCents) : <span className="restricted-value"><Icon name="lock" size={13} />Restricted</span>}</div>
                   <div className="text-xs text-ink-2 truncate">{p.memo} · {clock(p.createdAt)}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <StatusChip kind={p.status as ChipKind} />
+                  <StatusBadge label={p.status[0].toUpperCase() + p.status.slice(1)} />
                   {canManage && <>
-                    <ExternalLink href={p.url} className="text-xs underline underline-offset-2 text-ink-2 hover:text-ink h-9 px-1">Open</ExternalLink>
-                    <button onClick={() => copy(p.url, p.id)} className="text-xs underline underline-offset-2 text-ink-2 hover:text-ink h-9 px-1">{copiedId === p.id ? "Copied!" : "Copy link"}</button>
+                    <ExternalLink href={p.url} className="ui-button ui-button--ghost ui-button--sm">Open</ExternalLink>
+                    <button onClick={() => copy(p.url, p.id)} className="ui-button ui-button--ghost ui-button--sm">{copiedId === p.id ? "Copied" : "Copy link"}</button>
                   </>}
                 </div>
               </Card>

@@ -3,6 +3,8 @@ import { store, useStoreState } from "../../state/useStore";
 import { useToast } from "../../state/ToastContext";
 import { Avatar } from "../../components/Avatar";
 import { Button, Select, EmptyState } from "../../components/Primitives";
+import { Notice, PageHeader, StatusBadge, Tooltip } from "../../components/DesignSystem";
+import { Icon } from "../../components/icons";
 import { relativeTime } from "../../lib/format";
 import type { Lead } from "../../mock/types";
 import { useAuth } from "../../state/AuthContext";
@@ -27,37 +29,23 @@ export default function Recovery() {
   }
 
   return (
-    <div className="p-4 sm:p-6">
-      <header className="mb-5">
-        <h1 className="text-2xl font-semibold">Recovery queue</h1>
-        <p className="text-sm text-ink-2">Leads that went through full escalation with no acknowledgement.</p>
-      </header>
-      {!canManage && <p className="mb-4 rounded-card border border-border bg-neutral-bg px-3 py-2 text-xs text-text-muted">You can review recovery leads. Lead management permission is needed to reassign ownership.</p>}
+    <div className="page-content">
+      <PageHeader eyebrow="Customer management" title="Recovery queue" subtitle="Leads that went through full escalation with no acknowledgement." badge={<StatusBadge label={String(queue.length)} tone="danger" icon="warning" />} />
+      {!canManage && <Notice variant="restricted" className="mb-4" title="Read-only">You can review recovery leads. Lead management permission is needed to reassign ownership.</Notice>}
 
       {queue.length === 0 ? (
-        <EmptyState title="Nothing needs rescue." body="Leads that miss every escalation step will land here." />
+        <div className="data-table-card"><EmptyState title="Nothing to recover" body="Leads that miss every escalation step will appear here." /></div>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {queue.map((lead) => (
-            <li key={lead.id} className="flex flex-wrap items-center gap-3 bg-surface border rounded-card p-4" style={{ borderColor: "var(--alarm)" }}>
-              <Avatar name={lead.name} color="var(--danger-text)" />
-              <div className="flex-1 min-w-0">
-                <div className="font-medium">{lead.name}</div>
-                <div className="text-xs text-ink-2">{lead.phone} · captured {relativeTime(lead.createdAt)}</div>
-                <div className="text-sm mt-0.5" style={{ color: "var(--alarm)" }}>{lead.recoveryReason}</div>
-              </div>
-              <Button
-                disabled={!canManage}
-                onClick={() => {
-                  setReassignTarget(lead);
-                  setSelected(team.find((m) => m.availability === "available")?.id ?? "");
-                }}
-              >
-                Reassign
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <div className="data-table-card recovery-list">
+          <table className="w-full text-sm"><thead><tr>{["Lead", "Escalation outcome", "Path", "Action"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+            <tbody>{queue.map((lead) => <tr key={lead.id} className="data-row-danger">
+              <td data-label="Lead"><div className="table-person"><Avatar name={lead.name} size={36} /><div className="min-w-0"><strong className="block truncate">{lead.name}</strong><a className="app-link font-mono-tab text-xs" href={`tel:${lead.phone}`}>{lead.phone}</a><p className="mt-0.5 text-[11px] text-text-muted">Captured {relativeTime(lead.createdAt)}</p></div></div></td>
+              <td data-label="Escalation outcome"><StatusBadge label="No acknowledgement after full escalation" tone="danger" icon="warning" title={lead.recoveryReason} /></td>
+              <td data-label="Path"><div className="escalation-trail" aria-label="Escalation completed through levels 1, 2, and 3">{["L1", "L2", "L3"].map((level) => <span key={level}><Icon name="check" size={13} />{level}</span>)}</div></td>
+              <td data-label="Action" className="table-action-cell">{canManage ? <Button onClick={() => { setReassignTarget(lead); setSelected(team.find((m) => m.availability === "available")?.id ?? ""); }}>Reassign</Button> : <Tooltip content="You need leads.manage permission to reassign"><span><Button disabled>Reassign</Button></span></Tooltip>}</td>
+            </tr>)}</tbody>
+          </table><div className="data-table-footer"><span>Showing {queue.length} {queue.length === 1 ? "lead" : "leads"}</span></div>
+        </div>
       )}
 
       {reassignTarget && (

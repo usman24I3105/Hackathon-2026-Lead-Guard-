@@ -3,63 +3,98 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-// Reads the actual token values, so changing a color in index.css re-checks it here.
-// (Read from disk: Vitest stubs CSS imports, `?raw` included, to an empty string.
-// Vitest runs from the frontend/ root.)
 const css = readFileSync(join(process.cwd(), "src", "index.css"), "utf-8");
-const root = css.slice(css.indexOf(":root"), css.indexOf("}", css.indexOf(":root")));
-const tokens: Record<string, string> = {};
-for (const m of root.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)) tokens[m[1]] = m[2];
-tokens.white = "#ffffff";
 
-function luminance(hex: string) {
-  const [r, g, b] = [1, 3, 5].map((i) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+function parseTheme(pattern: RegExp) {
+  const block = css.match(pattern)?.[1] ?? "";
+  const tokens: Record<string, string> = {};
+  for (const match of block.matchAll(/--([\w-]+):\s*([^;]+);/g)) tokens[match[1]] = match[2].trim();
+  return tokens;
+}
+
+const themes = {
+  light: parseTheme(/:root\s*\{([\s\S]*?)\}/),
+  dark: parseTheme(/:root\[data-theme="dark"\]\s*\{([\s\S]*?)\}/),
+};
+
+type Color = { r: number; g: number; b: number; a: number };
+
+function color(token: string, tokens: Record<string, string>, seen = new Set<string>()): Color {
+  if (seen.has(token)) throw new Error(`Circular color token: ${token}`);
+  seen.add(token);
+  let value = tokens[token];
+  if (!value) throw new Error(`Missing color token --${token}`);
+  const alias = value.match(/^var\(--([\w-]+)\)$/);
+  if (alias) return color(alias[1], tokens, seen);
+  if (value.startsWith("#")) {
+    const hex = value.slice(1);
+    return { r: parseInt(hex.slice(0, 2), 16), g: parseInt(hex.slice(2, 4), 16), b: parseInt(hex.slice(4, 6), 16), a: 1 };
+  }
+  const rgba = value.match(/^rgba?\(([^)]+)\)$/);
+  if (!rgba) throw new Error(`Unsupported color value for --${token}: ${value}`);
+  const parts = rgba[1].replace(/\s*\/\s*/, ",").split(/[\s,]+/).filter(Boolean).map(Number);
+  return { r: parts[0], g: parts[1], b: parts[2], a: parts[3] ?? 1 };
+}
+
+function composite(foreground: Color, background: Color): Color {
+  return {
+    r: foreground.r * foreground.a + background.r * (1 - foreground.a),
+    g: foreground.g * foreground.a + background.g * (1 - foreground.a),
+    b: foreground.b * foreground.a + background.b * (1 - foreground.a),
+    a: 1,
+  };
+}
+
+function luminance(value: Color) {
+  const linear = [value.r, value.g, value.b].map((channel) => {
+    const c = channel / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
 }
 
-function ratio(fg: string, bg: string) {
-  const [a, b] = [luminance(tokens[fg]), luminance(tokens[bg])].sort((x, y) => y - x);
-  return (a + 0.05) / (b + 0.05);
+function ratio(foreground: Color, background: Color) {
+  const [high, low] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (high + 0.05) / (low + 0.05);
 }
 
-// [foreground, background] pairs that actually appear as text in the UI.
-const TEXT_PAIRS: [string, string][] = [
-  ["text", "bg"], ["text", "surface"], ["text", "neutral-bg"],
-  ["text-muted", "bg"], ["text-muted", "surface"], ["text-muted", "neutral-bg"], ["text-muted", "primary-soft"],
-  ["primary", "surface"], ["primary", "primary-soft"],
-  ["white", "primary"], ["white", "primary-hover"],
-  ["success-text", "surface"], ["success-text", "success-bg"],
-  ["warning-text", "surface"], ["warning-text", "warning-bg"],
-  ["danger-text", "surface"], ["danger-text", "danger-bg"],
-  ["neutral-text", "surface"], ["neutral-text", "neutral-bg"],
-  ["white", "warning-text"], // KPI attention badge
-  ["white", "danger-text"], // danger button
-];
+function blendedToken(foregroundToken: string, backgroundToken: string, tokens: Record<string, string>) {
+  return composite(color(foregroundToken, tokens), color(backgroundToken, tokens));
+}
 
-// Non-text UI that must be distinguishable (WCAG 1.4.11): control outlines, focus ring, alert border.
-const UI_PAIRS: [string, string][] = [
-  ["border-strong", "surface"],
-  ["primary", "surface"],
-  ["primary", "bg"],
-  ["danger", "surface"],
-];
-
-describe("color contrast (WCAG AA)", () => {
-  it("parsed the tokens it needs", () => {
-    for (const [fg, bg] of [...TEXT_PAIRS, ...UI_PAIRS]) {
-      expect(tokens[fg], `missing token --${fg}`).toBeDefined();
-      expect(tokens[bg], `missing token --${bg}`).toBeDefined();
+describe.each(Object.entries(themes))("%s theme contrast (WCAG AA)", (_theme, tokens) => {
+  it("defines the shared action and status tokens", () => {
+    for (const name of ["bg", "surface", "surface-raised", "text", "text-muted", "border-strong", "action", "action-hover", "action-active", "action-soft", "action-ring", "on-action", "success-text", "success-bg", "warning-text", "warning-bg", "danger-text", "danger-bg", "neutral-text", "neutral-bg"]) {
+      expect(tokens[name], `missing token --${name}`).toBeDefined();
     }
   });
 
-  it.each(TEXT_PAIRS)("text %s on %s is at least 4.5:1", (fg, bg) => {
-    expect(ratio(fg, bg)).toBeGreaterThanOrEqual(4.5);
+  it.each([["text", "bg"], ["text", "surface"], ["text-muted", "bg"], ["text-muted", "surface"], ["success-text", "success-bg"], ["warning-text", "warning-bg"], ["danger-text", "danger-bg"], ["neutral-text", "neutral-bg"]])("text --%s on --%s is at least 4.5:1", (foreground, background) => {
+    expect(ratio(color(foreground, tokens), color(background, tokens))).toBeGreaterThanOrEqual(4.5);
   });
 
-  it.each(UI_PAIRS)("UI %s on %s is at least 3:1", (fg, bg) => {
-    expect(ratio(fg, bg)).toBeGreaterThanOrEqual(3);
+  it.each(["action", "action-hover", "action-active"])("primary label on --%s is at least 4.5:1", (background) => {
+    expect(ratio(color("on-action", tokens), color(background, tokens))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("keeps action and muted text legible on the tinted action surface", () => {
+    const surface = color("surface", tokens);
+    for (const tint of ["action-soft", "action-soft-hover"]) {
+      const soft = composite(color(tint, tokens), surface);
+      expect(ratio(color("action", tokens), soft)).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(color("text-muted", tokens), soft)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it.each(["surface", "bg"])("action controls distinguish from --%s by at least 3:1", (background) => {
+    expect(ratio(color("action", tokens), color(background, tokens))).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(["surface", "bg"])("the focus ring distinguishes from --%s by at least 3:1", (background) => {
+    expect(ratio(blendedToken("action-ring", background, tokens), color(background, tokens))).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps the strong border visible against the surface", () => {
+    expect(ratio(color("border-strong", tokens), color("surface", tokens))).toBeGreaterThanOrEqual(3);
   });
 });

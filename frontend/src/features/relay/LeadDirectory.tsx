@@ -2,7 +2,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Button, EmptyState, Input, Select } from "../../components/Primitives";
 import { Avatar } from "../../components/Avatar";
-import { StatusChip } from "../../components/StatusChip";
+import { FilterBar, PageHeader, SegmentedTabs, StatusBadge } from "../../components/DesignSystem";
+import { Icon } from "../../components/icons";
 import { useCountdown, formatMmSs } from "../../lib/useCountdown";
 import { relativeTime } from "../../lib/format";
 import { store, useStoreState } from "../../state/useStore";
@@ -50,7 +51,7 @@ export default function LeadDirectory() {
   const [selectedView, setSelectedView] = useState("all");
   const [saveOpen, setSaveOpen] = useState(false);
   const [viewName, setViewName] = useState("");
-  const pageSize = 8;
+  const pageSize = 25;
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -75,6 +76,8 @@ export default function LeadDirectory() {
     setSelectedView(id);
     if (id === "all") { setStatus("all"); setOwnerId("all"); setQuery(""); setSort("deadline"); }
     if (id === "attention") { setStatus("attention"); setOwnerId("all"); setQuery(""); setSort("deadline"); }
+    if (id === "escalated") { setStatus("escalated"); setOwnerId("all"); setQuery(""); setSort("deadline"); }
+    if (id === "mine") { setStatus("all"); setOwnerId(session?.userId ?? "all"); setQuery(""); setSort("deadline"); }
     if (id === "acknowledged") { setStatus("acknowledged"); setOwnerId("all"); setQuery(""); setSort("newest"); }
     if (id === "recovery") { setStatus("recovery"); setOwnerId("all"); setQuery(""); setSort("newest"); }
     const saved = savedViews.find((view) => view.id === id);
@@ -102,28 +105,11 @@ export default function LeadDirectory() {
   }
 
   return (
-    <div className="p-4 sm:p-6">
-      <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="mb-1 text-xs font-medium text-primary">Customer management</p>
-          <h1 className="text-2xl font-semibold">Lead records</h1>
-          <p className="mt-1 text-sm text-text-muted">Ownership, source, and acknowledgement deadlines in one view.</p>
-        </div>
-        <Link to="/relay" className="inline-flex h-10 items-center rounded-control border border-border-strong px-3 text-sm font-medium text-text hover:bg-neutral-bg">Open live relay</Link>
-      </header>
+    <div className="page-content">
+      <PageHeader eyebrow="Customer management" title="Lead records" subtitle="Ownership, source, and acknowledgement deadlines in one view." actions={<Link to="/relay" className="ui-button ui-button--secondary ui-button--lg"><span className="ui-button-content">Open live relay <Icon name="arrow-up-right" size={15} /></span></Link>} />
 
-      <section className="mb-4 rounded-card border border-border bg-surface p-3 sm:p-4" aria-label="Lead filters">
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="lead-view">Saved view</label>
-          <Select id="lead-view" value={selectedView} onChange={(event) => applyView(event.target.value)} className="w-auto min-w-40">
-            <option value="all">All leads</option>
-            <option value="attention">Needs attention</option>
-            <option value="acknowledged">Acknowledged</option>
-            <option value="recovery">In recovery</option>
-            {selectedView === "custom" && <option value="custom" disabled>Custom filters</option>}
-            {savedViews.map((view) => <option key={view.id} value={view.id}>{view.name}</option>)}
-          </Select>
-          <Input aria-label="Search leads" placeholder="Search name, phone, source…" value={query} onChange={(event) => { setQuery(event.target.value); setSelectedView("custom"); setPage(0); }} className="min-w-48 flex-1 sm:max-w-xs" />
+      <FilterBar className="mb-3">
+          <Input aria-label="Search leads" placeholder="Search name, phone, source…" value={query} onChange={(event) => { setQuery(event.target.value); setSelectedView("custom"); setPage(0); }} className="min-w-48 flex-1 sm:max-w-[360px]" />
           <Select aria-label="Filter by status" value={status} onChange={(event) => { setStatus(event.target.value); setSelectedView("custom"); setPage(0); }} className="w-auto">
             <option value="all">Any status</option>
             <option value="attention">Needs attention</option>
@@ -137,9 +123,11 @@ export default function LeadDirectory() {
             <option value="deadline">Soonest deadline</option><option value="newest">Newest first</option><option value="name">Name A–Z</option>
           </Select>
           <Button variant="secondary" onClick={() => setSaveOpen((value) => !value)}>Save view</Button>
-        </div>
+      </FilterBar>
+      <SegmentedTabs as="nav" className="saved-view-tabs" ariaLabel="Saved lead views" value={selectedView} onChange={applyView} tabs={[{ value: "all", label: "All leads" }, { value: "attention", label: "Needs attention" }, { value: "escalated", label: "Escalated" }, { value: "mine", label: "Mine" }, ...savedViews.map((view) => ({ value: view.id, label: view.name }))]} />
+
         {saveOpen && (
-          <form onSubmit={saveView} className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
+          <form onSubmit={saveView} className="mb-4 flex flex-wrap items-end gap-2 rounded-card border border-border bg-surface p-3">
             <div className="min-w-48 flex-1 sm:max-w-xs">
               <label htmlFor="saved-view-name" className="mb-1 block text-xs font-medium">Name this view</label>
               <Input id="saved-view-name" autoFocus value={viewName} onChange={(event) => setViewName(event.target.value)} maxLength={40} placeholder="My overdue leads" required />
@@ -148,19 +136,18 @@ export default function LeadDirectory() {
             <Button type="button" variant="tertiary" onClick={() => setSaveOpen(false)}>Cancel</Button>
           </form>
         )}
-      </section>
 
       <div className="mb-2 flex items-center justify-between text-xs text-text-muted">
-        <span>{filtered.length} lead{filtered.length === 1 ? "" : "s"}</span>
-        {selectedView === "custom" && <button type="button" onClick={() => applyView("all")} className="underline underline-offset-2">Clear filters</button>}
+        <span aria-live="polite">Showing {filtered.length ? currentPage * pageSize + 1 : 0}–{Math.min(filtered.length, (currentPage + 1) * pageSize)} of {filtered.length}</span>
+        {selectedView === "custom" && <Button size="sm" variant="ghost" onClick={() => applyView("all")}>Clear filters</Button>}
       </div>
 
-      <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
+      <div className="data-table-card">
         {rows.length === 0 ? <EmptyState title="No leads match this view." body="Adjust the filters or choose another saved view." /> : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-sm">
-              <thead className="bg-neutral-bg/70 text-left text-xs text-text-muted">
-                <tr>{["Lead", "Source", "Opportunity", "Owner", "Status", "Acknowledgement", "Last activity", "Action"].map((heading) => <th key={heading} className="px-4 py-3 font-medium">{heading}</th>)}</tr>
+            <table className="w-full text-sm">
+              <thead>
+                <tr>{["Lead", "Source", "Opportunity", "Owner", "Status", "Acknowledgement", "Last activity", "Action"].map((heading) => <th key={heading} scope="col">{heading}</th>)}</tr>
               </thead>
               <tbody>
                 {rows.map((lead) => {
@@ -170,18 +157,18 @@ export default function LeadDirectory() {
                   const lastActivity = timelines[lead.id]?.at(-1)?.at ?? lead.ackedAt ?? lead.createdAt;
                   const canAcknowledge = session?.userId === lead.ownerId && (lead.status === "waiting" || lead.status === "escalated");
                   return (
-                    <tr key={lead.id} className="border-t border-border/80 transition-colors hover:bg-neutral-bg/50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5"><Avatar name={lead.name} color={owner?.avatarColor ?? "var(--neutral-text)"} size={34} /><div className="min-w-0"><p className="font-medium text-text">{contact ? <Link to={`/contacts/${contact.id}`} className="hover:text-primary hover:underline">{lead.name}</Link> : lead.name}</p><p className="text-xs text-text-muted">{lead.phone}</p></div></div>
+                    <tr key={lead.id} className={`transition-colors ${lead.status === "escalated" ? "data-row-danger" : ""}`}>
+                      <td data-label="Lead">
+                        <div className="flex min-w-0 items-center gap-2.5"><Avatar name={lead.name} color={owner?.avatarColor} size={32} /><div className="min-w-0"><p className="truncate font-medium text-text">{contact ? <Link to={`/contacts/${contact.id}`} className="app-link">{lead.name}</Link> : lead.name}</p><p className="font-mono-tab text-xs text-text-muted">{lead.phone}</p></div></div>
                       </td>
-                      <td className="px-4 py-3 text-text-muted">{lead.source}</td>
-                      <td className="px-4 py-3 text-text-muted">{opportunity?.title ?? "—"}</td>
-                      <td className="px-4 py-3"><span className="text-text">{owner?.name ?? "Unassigned"}</span><p className="text-xs text-text-muted">Level {lead.level}</p></td>
-                      <td className="px-4 py-3"><StatusChip kind={lead.status} /></td>
-                      <td className="px-4 py-3"><Deadline lead={lead} /></td>
-                      <td className="px-4 py-3 text-xs text-text-muted" title={new Date(lastActivity).toLocaleString()}>{relativeTime(lastActivity)}</td>
-                      <td className="px-4 py-3">
-                        {canAcknowledge ? <Button onClick={() => acknowledge(lead)} className="h-9 px-3">Acknowledge</Button> : <Link to="/relay" className="inline-flex h-9 items-center px-2 text-xs font-medium text-primary hover:underline">Open relay</Link>}
+                      <td data-label="Source"><span className="source-chip">{lead.source}</span></td>
+                      <td data-label="Opportunity">{opportunity ? <Link className="app-link" to={`/opportunities`}>{opportunity.title}</Link> : <span className="text-text-muted">No opportunity</span>}</td>
+                      <td data-label="Owner"><div className="table-person">{owner && <Avatar name={owner.name} color={owner.avatarColor} size={28} />}<span className="truncate">{owner?.name ?? "Unassigned"}</span><span className="level-badge">L{lead.level}</span></div></td>
+                      <td data-label="Status"><StatusBadge label={LABELS[lead.status]} tone={lead.status === "acknowledged" ? "success" : lead.status === "waiting" ? "warning" : ["escalated", "overdue", "recovery"].includes(lead.status) ? "danger" : "neutral"} /></td>
+                      <td data-label="Acknowledgement"><div className="deadline-cell"><Deadline lead={lead} /><span>SLA</span></div></td>
+                      <td data-label="Last activity"><time className="text-xs text-text-muted" title={new Date(lastActivity).toLocaleString()}>{relativeTime(lastActivity)}</time></td>
+                      <td data-label="Action" className="table-action-cell">
+                        {canAcknowledge ? <Button size="md" onClick={() => acknowledge(lead)} leadingIcon={<Icon name="check" size={15} />}>Acknowledge</Button> : <Link to="/relay" className="ui-button ui-button--ghost ui-button--md"><span className="ui-button-content">Open relay <Icon name="arrow-up-right" size={15} /></span></Link>}
                       </td>
                     </tr>
                   );

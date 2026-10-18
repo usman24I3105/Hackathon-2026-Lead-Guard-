@@ -45,6 +45,7 @@ export const contacts: Contact[] = [
   { id: "c-003", name: "Jason Flores", phone: "+1 555-0177", ownerId: "u-sara", optedOut: true, createdAt: minutesAgo(600) },
   { id: "c-004", name: "Lindsey Carr", phone: "+1 555-0193", ownerId: "u-imran", optedOut: false, createdAt: minutesAgo(90) },
   { id: "c-005", name: "Tomas Reyes", phone: "+1 555-0220", ownerId: "u-dana", optedOut: false, createdAt: minutesAgo(30) },
+  { id: "c-006", name: "Sister", phone: "+817054633568", ownerId: "u-imran", optedOut: false, createdAt: minutesAgo(10) },
 ];
 
 export const companies: Company[] = [

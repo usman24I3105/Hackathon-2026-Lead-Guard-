@@ -1,108 +1,108 @@
+import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { store, useStoreState } from "../../state/useStore";
 import { Avatar } from "../../components/Avatar";
-import { Card, EmptyState } from "../../components/Primitives";
+import { Button, Card, EmptyState } from "../../components/Primitives";
+import { Icon } from "../../components/icons";
+import { PageHeader, SegmentedTabs, StatusBadge } from "../../components/DesignSystem";
 import { maskedMoney, relativeTime } from "../../lib/format";
 import { has } from "../../lib/perm";
 import { useAuth } from "../../state/AuthContext";
+import { useToast } from "../../state/ToastContext";
 import { Conversation } from "./Conversation";
 import { PaymentsPanel } from "./PaymentsPanel";
 import { AppointmentsPanel } from "./AppointmentsPanel";
+
+type ActivityKind = "message" | "payment" | "appointment" | "opportunity" | "system";
+type ContactActivity = { id: string; at: string; label: string; detail: string; kind: ActivityKind };
 
 export default function Contact360() {
   const { id } = useParams<{ id: string }>();
   const { contacts, companies, opportunities, team, messages, payments, appointments } = useStoreState();
   const { session } = useAuth();
+  const { push } = useToast();
+  const [activityFilter, setActivityFilter] = useState<"all" | "message" | "payment" | "system">("all");
+  const [copiedPhone, setCopiedPhone] = useState(false);
   const contact = contacts.find((c) => c.id === id);
 
+  const activity = useMemo<ContactActivity[]>(() => {
+    if (!contact) return [];
+    return [
+      { id: `contact-${contact.id}`, at: contact.createdAt, label: "Contact added", detail: "Customer record created", kind: "system" as const },
+      ...messages.filter((message) => message.contactId === contact.id).map((message) => ({ id: message.id, at: message.at, label: message.direction === "in" ? "Message received" : "Message sent", detail: message.body, kind: "message" as const })),
+      ...payments.filter((payment) => payment.contactId === contact.id).map((payment) => ({ id: payment.id, at: payment.createdAt, label: `Payment ${payment.status}`, detail: payment.memo, kind: "payment" as const })),
+      ...appointments.filter((appointment) => appointment.contactId === contact.id).map((appointment) => ({ id: appointment.id, at: appointment.start, label: `Appointment ${appointment.status}`, detail: appointment.title, kind: "system" as const })),
+      ...opportunities.filter((opportunity) => opportunity.contactId === contact.id).map((opportunity) => ({ id: opportunity.id, at: opportunity.createdAt, label: "Opportunity created", detail: opportunity.title, kind: "opportunity" as const })),
+    ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  }, [appointments, contact, messages, opportunities, payments]);
+
   if (!contact) {
-    return <EmptyState title="Contact not found." body="It may have been removed." action={<Link to="/contacts" className="text-focus underline">Back to contacts</Link>} />;
+    return <div className="page-content"><div className="data-table-card"><EmptyState title="Contact not found" body="It may have been removed or is no longer available." action={<Link to="/contacts" className="app-link">Back to contacts</Link>} /></div></div>;
   }
 
   const owner = team.find((m) => m.id === contact.ownerId);
   const relatedCompanies = companies.filter((company) => company.contactIds.includes(contact.id));
-  const opps = opportunities.filter((o) => o.contactId === contact.id);
+  const opps = opportunities.filter((opportunity) => opportunity.contactId === contact.id);
   const canSeeValue = !session || has({ role: session.role }, "pipeline.manage") || has({ role: session.role }, "dashboard.full");
-  const activity = [
-    { id: `contact-${contact.id}`, at: contact.createdAt, label: "Contact added", detail: "Customer record created" },
-    ...messages.filter((message) => message.contactId === contact.id).map((message) => ({
-      id: message.id, at: message.at, label: message.direction === "in" ? "Message received" : "Message sent", detail: message.body,
-    })),
-    ...payments.filter((payment) => payment.contactId === contact.id).map((payment) => ({
-      id: payment.id, at: payment.createdAt, label: `Payment ${payment.status}`, detail: payment.memo,
-    })),
-    ...appointments.filter((appointment) => appointment.contactId === contact.id).map((appointment) => ({
-      id: appointment.id, at: appointment.start, label: `Appointment ${appointment.status}`, detail: appointment.title,
-    })),
-    ...opps.map((opportunity) => ({
-      id: opportunity.id, at: opportunity.createdAt, label: "Opportunity created", detail: opportunity.title,
-    })),
-  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  const shownActivity = activity.filter((event) => activityFilter === "all" || (activityFilter === "system" ? ["system", "opportunity"].includes(event.kind) : event.kind === activityFilter));
+  const groupedActivity = shownActivity.reduce<Record<string, ContactActivity[]>>((groups, event) => {
+    const day = new Date(event.at).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+    (groups[day] ??= []).push(event);
+    return groups;
+  }, {});
+
+  async function copyPhone() {
+    if (!contact) return;
+    try {
+      await navigator.clipboard.writeText(contact.phone);
+      setCopiedPhone(true);
+      window.setTimeout(() => setCopiedPhone(false), 1400);
+      push("Phone number copied.", "success");
+    } catch {
+      push("Phone number could not be copied here.", "error");
+    }
+  }
 
   return (
-    <div className="p-4 sm:p-6 max-w-5xl">
-      <Link to="/contacts" className="text-sm text-ink-2 underline underline-offset-2 mb-4 inline-block">← Contacts</Link>
+    <div className="page-content">
+      <PageHeader
+        eyebrow="Contact profile"
+        title={<span className="profile-title"><Avatar name={contact.name} size={56} /><span>{contact.name}</span></span>}
+        subtitle={<div className="contact-meta-row">
+          <span className="contact-meta-chip"><Icon name="phone" size={14} /><a className="app-link font-mono-tab" href={`tel:${contact.phone}`}>{contact.phone}</a><button type="button" onClick={copyPhone} aria-label="Copy phone number" title={copiedPhone ? "Copied" : "Copy phone number"}><Icon name={copiedPhone ? "check" : "copy"} size={13} /></button></span>
+          {owner && <span className="contact-meta-chip"><Avatar name={owner.name} size={22} color={owner.avatarColor} />Owner: {owner.name}</span>}
+          <span className="contact-meta-chip">Contact since {relativeTime(contact.createdAt)}</span>
+          {contact.optedOut && <StatusBadge label="Opted out" tone="danger" icon="close" />}
+        </div>}
+        breadcrumb={<Link to="/contacts" className="app-link">Contacts / {contact.name}</Link>}
+        actions={<Button variant={contact.optedOut ? "secondary" : "danger-ghost"} onClick={() => store.toggleOptOut(contact.id, !contact.optedOut)}>{contact.optedOut ? "Re-enable messaging" : "Mark opted out"}</Button>}
+      />
 
-      <header className="flex items-center gap-4 mb-6">
-        <Avatar name={contact.name} color="var(--neutral-text)" size={48} />
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
-            {contact.name}
-            {contact.optedOut && <span className="text-xs text-alarm bg-alarm-bg rounded-full px-2 py-0.5">Opted out</span>}
-          </h1>
-          <p className="text-sm text-ink-2">{contact.phone} · Owner: {owner?.name} · Contact since {relativeTime(contact.createdAt)}</p>
-        </div>
-        <button
-          onClick={() => store.toggleOptOut(contact.id, !contact.optedOut)}
-          className="text-sm underline underline-offset-2 text-ink-2 hover:text-ink shrink-0"
-        >
-          {contact.optedOut ? "Re-enable messaging" : "Mark opted out"}
-        </button>
-      </header>
+      <div className="contact-profile-grid">
+        <main className="contact-main-column">
+          <section className="contact-section"><div className="contact-section-head"><div><h2>Conversation</h2><p>Messages and delivery history</p></div><Link to="/conversations" className="ui-button ui-button--ghost ui-button--sm">Open inbox</Link></div><Conversation contactId={contact.id} optedOut={contact.optedOut} /></section>
+          <section className="contact-section">
+            <div className="contact-section-head"><div><h2>Activity timeline</h2><p>Events from this contact record</p></div>
+              <SegmentedTabs className="activity-filters" ariaLabel="Filter activity" value={activityFilter} onChange={setActivityFilter} tabs={[{ value: "all", label: "All" }, { value: "message", label: "Messages" }, { value: "payment", label: "Payments" }, { value: "system", label: "System" }]} />
+            </div>
+            {shownActivity.length ? <div className="contact-timeline">{Object.entries(groupedActivity).map(([day, events]) => <section key={day} className="contact-timeline-day"><h3>{day}</h3><ol>{events.map((event) => <li key={`${event.id}-${event.label}`}><span className={`timeline-icon timeline-icon--${event.kind}`}><Icon name={event.kind === "message" ? "message" : event.kind === "payment" ? "payments" : event.kind === "opportunity" ? "opportunities" : "activity"} size={14} /></span><div className="timeline-event-copy"><div className="timeline-event-heading"><strong>{event.label}</strong><time dateTime={event.at} title={new Date(event.at).toLocaleString()}>{relativeTime(event.at)}</time></div><p>{event.detail}</p></div></li>)}</ol></section>)}</div> : <EmptyState title="No activity in this view" body="Try another activity filter or check back later." />}
+          </section>
+        </main>
 
-      <Card className="mb-6 flex flex-wrap items-center gap-3 p-4">
-        <div className="min-w-40 flex-1"><p className="text-xs font-medium text-text-muted">Associated companies</p>
-          {relatedCompanies.length ? <div className="mt-1 flex flex-wrap gap-2">{relatedCompanies.map((company) => <Link key={company.id} to={`/companies/${company.id}`} className="rounded-full bg-primary-soft px-3 py-1 text-sm font-medium text-primary hover:underline">{company.name}</Link>)}</div> : <p className="mt-1 text-sm text-text-muted">No company linked</p>}
-        </div>
-        <Link to="/companies" className="text-sm font-medium text-primary hover:underline">Browse companies</Link>
-      </Card>
+        <aside className="contact-info-rail" aria-label="Contact details">
+          <Card className="contact-rail-card"><div className="contact-section-head"><div><h2>Associated companies</h2><p>Account relationships</p></div><span className="rail-count">{relatedCompanies.length}</span></div>
+            {relatedCompanies.length ? <ul className="contact-rail-list">{relatedCompanies.map((company) => <li key={company.id}><Link to={`/companies/${company.id}`} className="company-rail-link"><span className="company-rail-mark">{company.name.trim().slice(0, 1).toUpperCase()}</span><span className="truncate">{company.name}</span><Icon name="arrow-right" size={14} /></Link></li>)}</ul> : <p className="contact-rail-empty">No company associated</p>}
+            <Link to="/companies" className="ui-button ui-button--ghost ui-button--sm">Browse companies</Link>
+          </Card>
 
-      <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-        <div className="flex flex-col gap-6">
-          <section><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-text-muted">Conversation</h2><Link to="/conversations" className="text-xs font-medium text-primary hover:underline">Open inbox</Link></div><Conversation contactId={contact.id} optedOut={contact.optedOut} /></section>
+          <Card className="contact-rail-card"><div className="contact-section-head"><div><h2>Opportunities</h2><p>Open and recent work</p></div><span className="rail-count">{opps.length}</span></div>
+            {opps.length ? <ul className="contact-rail-list">{opps.map((opportunity) => <li key={opportunity.id}><div className="contact-opp-row"><div className="min-w-0"><strong title={opportunity.title}>{opportunity.title}</strong><small>{relativeTime(opportunity.createdAt)}</small></div>{canSeeValue ? <span className="font-mono-tab text-xs">{maskedMoney(opportunity.valueCents, true)}</span> : <span className="restricted-value"><Icon name="lock" size={13} />Restricted</span>}</div></li>)}</ul> : <p className="contact-rail-empty">No opportunities yet</p>}
+          </Card>
 
-          <div>
-            <h3 className="text-sm font-semibold text-ink-2 uppercase tracking-wide mb-3">Opportunities</h3>
-            {opps.length === 0 ? (
-              <p className="text-sm text-ink-2">No opportunities yet.</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {opps.map((o) => (
-                  <li key={o.id}>
-                    <Card className="p-3 flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">{o.title}</div>
-                        <div className="text-xs text-ink-2">{relativeTime(o.createdAt)}</div>
-                      </div>
-                      <span className="font-mono-tab text-sm shrink-0">{maskedMoney(o.valueCents, canSeeValue)}</span>
-                    </Card>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-6">
-          <PaymentsPanel contactId={contact.id} />
-          <AppointmentsPanel contactId={contact.id} />
-        </div>
+          <Card className="contact-rail-card"><PaymentsPanel contactId={contact.id} /></Card>
+          <Card className="contact-rail-card"><AppointmentsPanel contactId={contact.id} /></Card>
+        </aside>
       </div>
-
-      <section className="mt-7 max-w-5xl">
-        <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-semibold">Activity timeline</h2><span className="text-xs text-text-muted">Chronological events from available records</span></div>
-        {activity.length ? <ol className="relative ml-2 border-l border-border pl-5">{activity.map((event) => <li key={`${event.id}-${event.label}`} className="relative pb-5 last:pb-0"><span className="absolute -left-[1.42rem] top-1 h-2.5 w-2.5 rounded-full border-2 border-surface bg-primary" /><div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><p className="text-sm font-medium">{event.label}</p><time className="text-xs text-text-muted" dateTime={event.at} title={new Date(event.at).toLocaleString()}>{relativeTime(event.at)}</time></div><p className="mt-1 text-sm text-text-muted">{event.detail}</p></li>)}</ol> : <EmptyState title="No activity recorded." body="Messages, appointments, and opportunities will build this timeline." />}
-      </section>
     </div>
   );
 }
