@@ -1,22 +1,27 @@
 # Dependencies
 node_modules/
+backend/node_modules/
+frontend/node_modules/
 .pnp
 .pnp.js
 
 # Build outputs
 dist/
+dist-ssr/
 build/
 out/
 .next/
+backend/dist/
+frontend/dist/
 
 # Environment and secrets
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 *.pem
 *.key
+backend/calendar_tokens.json
+API_KEYS.md
 
 # Logs
 logs/
@@ -40,7 +45,8 @@ ehthumbs.db
 
 # IDE & Editor files
 .idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 *.suo
 *.ntvs*
 *.njsproj
@@ -53,5 +59,6 @@ temp/
 scratch/
 *.tmp
 
-# Large archives
+# Large archives and data
 *.zip
+backend/leads.csv
