@@ -112,6 +112,27 @@ leadRoutes.post('/intake', publicFormRateLimit, async (req, res, next) => {
   }
 });
 
+// ── Recovery queue (must be before /:id) ──────────────────────────────────────
+leadRoutes.get('/recovery', requireAuth, async (req, res, next) => {
+  const r = req as AuthRequest;
+  try {
+    await withTenant(r.workspaceId, async (client) => {
+      const { rows } = await client.query(
+        `SELECT l.id, l.state, l.recovery_reason, l.escalation_count, l.created_at,
+                c.name AS contact_name, c.phone_e164
+         FROM lead l
+         JOIN contact c ON c.id = l.contact_id
+         WHERE l.workspace_id = $1 AND l.state = 'recovery'
+         ORDER BY l.created_at DESC`,
+        [r.workspaceId],
+      );
+      res.json({ leads: rows, total: rows.length });
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Get lead ──────────────────────────────────────────────────────────────────
 leadRoutes.get('/:id', requireAuth, async (req, res, next) => {
   const r = req as AuthRequest;
@@ -190,26 +211,7 @@ leadRoutes.post('/', requireAuth, async (req, res, next) => {
   }
 });
 
-// ── Recovery queue ────────────────────────────────────────────────────────────
-leadRoutes.get('/recovery', requireAuth, async (req, res, next) => {
-  const r = req as AuthRequest;
-  try {
-    await withTenant(r.workspaceId, async (client) => {
-      const { rows } = await client.query(
-        `SELECT l.id, l.state, l.recovery_reason, l.escalation_count, l.created_at,
-                c.name AS contact_name, c.phone_e164
-         FROM lead l
-         JOIN contact c ON c.id = l.contact_id
-         WHERE l.workspace_id = $1 AND l.state = 'recovery'
-         ORDER BY l.created_at DESC`,
-        [r.workspaceId],
-      );
-      res.json({ leads: rows, total: rows.length });
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+
 
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/[^\d+]/g, '');

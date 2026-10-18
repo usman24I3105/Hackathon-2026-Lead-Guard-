@@ -215,25 +215,202 @@ crmRoutes.delete('/stages/:id', requirePermission('crm.manage'), async (req, res
   } catch (err) { next(err); }
 });
 
-// ── 360 view ──────────────────────────────────────────────────────────────────
-crmRoutes.get('/contacts/:id/360', async (req, res, next) => {
+// ── Custom fields ─────────────────────────────────────────────────────────────
+const createFieldSchema = z.object({
+  name: z.string().min(1).max(100),
+  type: z.enum(['text', 'number', 'date', 'select', 'boolean']),
+  options: z.array(z.string()).optional(),
+  position: z.number().int().default(0),
+});
+
+crmRoutes.get('/pipelines/:pipelineId/fields', async (req, res, next) => {
   const r = req as unknown as AuthRequest;
   try {
     await withTenant(r.workspaceId, async (client) => {
-      const hasValuesView = await checkPermission(r.userId, r.workspaceId, 'values.view');
-      const [contactRes, oppsRes, leadsRes, messagesRes] = await Promise.all([
-        client.query(`SELECT * FROM contact WHERE id = $1 AND workspace_id = $2`, [req.params['id'], r.workspaceId]),
-        client.query(`SELECT id, name, stage_id, value_cents FROM opportunity WHERE contact_id = $1 AND workspace_id = $2`, [req.params['id'], r.workspaceId]),
-        client.query(`SELECT id, state, created_at, escalation_count FROM lead WHERE contact_id = $1 AND workspace_id = $2`, [req.params['id'], r.workspaceId]),
-        client.query(`SELECT id, direction, body, created_at FROM message WHERE contact_id = $1 AND workspace_id = $2 ORDER BY created_at DESC LIMIT 20`, [req.params['id'], r.workspaceId]),
-      ]);
-      if (!contactRes.rows[0]) return next(new AppError(404, 'not_found', 'Contact not found'));
-      res.json(maskValues({
-        contact: contactRes.rows[0],
-        opportunities: oppsRes.rows,
-        leads: leadsRes.rows,
-        messages: messagesRes.rows,
-      }, hasValuesView));
+      const { rows } = await client.query(
+        `SELECT id, pipeline_id, name, type, options, position, created_at
+         FROM custom_field WHERE pipeline_id = $1 AND workspace_id = $2 ORDER BY position`,
+        [req.params['pipelineId'], r.workspaceId],
+      );
+      res.json({ fields: rows });
+    });
+  } catch (err) { next(err); }
+});
+
+crmRoutes.post('/pipelines/:pipelineId/fields', requirePermission('crm.manage'), async (req, res, next) => {
+  const r = req as unknown as AuthRequest;
+  try {
+    const body = createFieldSchema.strict().parse(req.body);
+    await withTenant(r.workspaceId, async (client) => {
+      const id = `fld_${randomUUID().slice(0, 12)}`;
+      await client.query(
+        `INSERT INTO custom_field (id, workspace_id, pipeline_id, name, type, options, position)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [id, r.workspaceId, req.params['pipelineId'], body.name, body.type, JSON.stringify(body.options ?? []), body.position],
+      );
+      await writeAudit(client, { workspaceId: r.workspaceId, userId: r.userId, type: 'field.created', entityType: 'custom_field', entityId: id, actor: 'user', after: body });
+      res.status(201).json({ id });
+    });
+  } catch (err) { next(err); }
+});
+
+crmRoutes.delete('/fields/:id', requirePermission('crm.manage'), async (req, res, next) => {
+  const r = req as unknown as AuthRequest;
+  try {
+    await withTenant(r.workspaceId, async (client) => {
+      await client.query(`DELETE FROM custom_field WHERE id = $1 AND workspace_id = $2`, [req.params['id'], r.workspaceId]);
+      await writeAudit(client, { workspaceId: r.workspaceId, userId: r.userId, type: 'field.deleted', entityType: 'custom_field', entityId: String(req.params['id']), actor: 'user' });
+      res.json({ ok: true });
+    });
+  } catch (err) { next(err); }
+});
+
+// ── Pipeline & Stage Management ───────────────────────────────────────────────
+const createPipelineSchema = z.object({
+  name: z.string().min(1).max(100),
+  position: z.number().int().default(0),
+});
+
+crmRoutes.post('/pipelines', requirePermission('crm.manage'), async (req, res, next) => {
+  const r = req as AuthRequest;
+  try {
+    const body = createPipelineSchema.strict().parse(req.body);
+    await withTenant(r.workspaceId, async (client) => {
+      const id = `pip_${randomUUID().slice(0, 12)}`;
+      await client.query(
+        `INSERT INTO pipeline (id, workspace_id, name, position) VALUES ($1, $2, $3, $4)`,
+        [id, r.workspaceId, body.name, body.position],
+      );
+      await writeAudit(client, { workspaceId: r.workspaceId, userId: r.userId, type: 'pipeline.created', entityType: 'pipeline', entityId: id, actor: 'user', after: body });
+      res.status(201).json({ id });
+    });
+  } catch (err) { next(err); }
+});
+
+const createStageSchema = z.object({
+  pipelineId: z.string(),
+  name: z.string().min(1).max(100),
+  position: z.number().int().default(0),
+  requiredFieldIds: z.array(z.string()).default([]),
+});
+
+crmRoutes.post('/stages', requirePermission('crm.manage'), async (req, res, next) => {
+  const r = req as AuthRequest;
+  try {
+    const body = createStageSchema.strict().parse(req.body);
+    await withTenant(r.workspaceId, async (client) => {
+      const id = `stg_${randomUUID().slice(0, 12)}`;
+      await client.query(
+        `INSERT INTO stage (id, workspace_id, pipeline_id, name, position, required_field_ids)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, r.workspaceId, body.pipelineId, body.name, body.position, body.requiredFieldIds],
+      );
+      await writeAudit(client, { workspaceId: r.workspaceId, userId: r.userId, type: 'stage.created', entityType: 'stage', entityId: id, actor: 'user', after: body });
+      res.status(201).json({ id });
+    });
+  } catch (err) { next(err); }
+});
+
+const updateStageSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  position: z.number().int().optional(),
+  requiredFieldIds: z.array(z.string()).optional(),
+});
+
+crmRoutes.put('/stages/:id', requirePermission('crm.manage'), async (req, res, next) => {
+  const r = req as unknown as AuthRequest;
+  try {
+    const body = updateStageSchema.strict().parse(req.body);
+    await withTenant(r.workspaceId, async (client) => {
+      const updates: string[] = [];
+      const values: unknown[] = [req.params['id'], r.workspaceId];
+      let idx = 3;
+      if (body.name !== undefined) { updates.push(`name = $${idx++}`); values.push(body.name); }
+      if (body.position !== undefined) { updates.push(`position = $${idx++}`); values.push(body.position); }
+      if (body.requiredFieldIds !== undefined) { updates.push(`required_field_ids = $${idx++}`); values.push(body.requiredFieldIds); }
+      if (updates.length > 0) {
+        await client.query(`UPDATE stage SET ${updates.join(', ')} WHERE id = $1 AND workspace_id = $2`, values);
+        await writeAudit(client, { workspaceId: r.workspaceId, userId: r.userId, type: 'stage.updated', entityType: 'stage', entityId: String(req.params['id']), actor: 'user', after: body });
+      }
+      res.json({ ok: true });
+    });
+  } catch (err) { next(err); }
+});
+
+// ── Contact Notes ─────────────────────────────────────────────────────────────
+crmRoutes.post('/contacts/:id/notes', async (req, res, next) => {
+  const r = req as unknown as AuthRequest;
+  try {
+    const { body } = z.object({ body: z.string().min(1).max(5000) }).strict().parse(req.body);
+    await withTenant(r.workspaceId, async (client) => {
+      const id = `note_${randomUUID().slice(0, 12)}`;
+      await writeAudit(client, {
+        workspaceId: r.workspaceId,
+        userId: r.userId,
+        type: 'contact.note_added',
+        entityType: 'contact',
+        entityId: req.params['id'],
+        actor: 'user',
+        after: { id, note: body },
+      });
+      res.status(201).json({ id, ok: true });
+    });
+  } catch (err) { next(err); }
+});
+
+crmRoutes.get('/contacts/:id/notes', async (req, res, next) => {
+  const r = req as unknown as AuthRequest;
+  try {
+    await withTenant(r.workspaceId, async (client) => {
+      const { rows } = await client.query(
+        `SELECT id, actor, user_id, after->>'note' AS note, at FROM audit_log
+         WHERE workspace_id = $1 AND entity_type = 'contact' AND entity_id = $2 AND type = 'contact.note_added'
+         ORDER BY at DESC`,
+        [r.workspaceId, req.params['id']],
+      );
+      res.json({ notes: rows });
+    });
+  } catch (err) { next(err); }
+});
+
+// ── Saved Filters / Lists ─────────────────────────────────────────────────────
+const createFilterSchema = z.object({
+  name: z.string().min(1).max(100),
+  target: z.enum(['opportunity', 'contact', 'lead']),
+  criteria: z.record(z.unknown()),
+});
+
+crmRoutes.get('/filters', async (req, res, next) => {
+  const r = req as AuthRequest;
+  try {
+    await withTenant(r.workspaceId, async (client) => {
+      const { rows } = await client.query<{ settings: { savedFilters?: unknown[] } }>(
+        `SELECT settings FROM workspace WHERE id = $1`,
+        [r.workspaceId],
+      );
+      res.json({ filters: rows[0]?.settings?.savedFilters ?? [] });
+    });
+  } catch (err) { next(err); }
+});
+
+crmRoutes.post('/filters', async (req, res, next) => {
+  const r = req as AuthRequest;
+  try {
+    const body = createFilterSchema.strict().parse(req.body);
+    const filterId = `flt_${randomUUID().slice(0, 12)}`;
+    const newFilter = { id: filterId, ...body, createdBy: r.userId, createdAt: new Date().toISOString() };
+    await withTenant(r.workspaceId, async (client) => {
+      await client.query(
+        `UPDATE workspace
+         SET settings = jsonb_set(
+           COALESCE(settings, '{}'::jsonb),
+           '{savedFilters}',
+           COALESCE(settings->'savedFilters', '[]'::jsonb) || $1::jsonb
+         )
+         WHERE id = $2`,
+        [JSON.stringify([newFilter]), r.workspaceId],
+      );
+      res.status(201).json(newFilter);
     });
   } catch (err) { next(err); }
 });
