@@ -1,16 +1,19 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 export function Button({
   variant = "primary",
   className = "",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "tertiary" | "danger" }) {
-  const base = "inline-flex items-center justify-center gap-2 rounded-[10px] text-sm font-medium px-4 h-11 sm:h-10 transition disabled:opacity-50 disabled:cursor-not-allowed";
+  const base =
+    "inline-flex items-center justify-center gap-2 rounded-control text-sm font-medium px-4 h-11 sm:h-10 " +
+    "transition-[background-color,border-color,color,background-position,box-shadow,transform] duration-150 ease-out " +
+    "active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
   const styles = {
-    primary: "bg-ink text-paper hover:bg-ink/90",
-    secondary: "bg-surface border border-line text-ink hover:border-ink/40",
-    tertiary: "bg-transparent text-ink-2 hover:text-ink underline-offset-2 hover:underline",
-    danger: "bg-alarm text-white hover:bg-alarm/90",
+    primary: "brand-gradient-button text-white",
+    secondary: "bg-surface border border-border-strong text-text hover:bg-neutral-bg active:bg-border",
+    tertiary: "bg-transparent text-text-muted hover:text-text underline-offset-2 hover:underline",
+    danger: "bg-danger-text text-white hover:bg-danger-text/90",
   }[variant];
   return <button className={`${base} ${styles} ${className}`} {...props} />;
 }
@@ -42,7 +45,7 @@ export function FormField({
   );
 }
 
-const inputBase = "w-full rounded-[10px] border border-line bg-surface px-3 h-11 sm:h-10 text-sm text-ink placeholder:text-ink-2/70 focus-visible:border-focus";
+const inputBase = "w-full rounded-control border border-border-strong bg-surface px-3 h-11 sm:h-10 text-sm text-text placeholder:text-text-muted focus-visible:border-primary";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }) {
   const { invalid, className = "", ...rest } = props;
@@ -60,11 +63,11 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 }
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`bg-surface border border-line rounded-[10px] ${className}`}>{children}</div>;
+  return <div className={`bg-surface border border-border rounded-card shadow-card ${className}`}>{children}</div>;
 }
 
-export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-md bg-line/60 ${className}`} />;
+export function Skeleton({ className = "", style }: { className?: string; style?: CSSProperties }) {
+  return <div className={`animate-pulse rounded-md bg-neutral-bg ${className}`} style={style} />;
 }
 
 export function EmptyState({ title, body, action }: { title: string; body?: string; action?: ReactNode }) {
@@ -79,7 +82,7 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
 
 export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-[10px] border px-4 py-3 text-sm" style={{ borderColor: "var(--alarm)", background: "var(--alarm-bg)", color: "var(--alarm)" }} role="alert">
+    <div className="flex items-center justify-between gap-3 rounded-card border px-4 py-3 text-sm" style={{ borderColor: "var(--alarm)", background: "var(--alarm-bg)", color: "var(--alarm)" }} role="alert">
       <span className="flex items-center gap-2"><span aria-hidden>⚠</span>{message}</span>
       {onRetry && (
         <button onClick={onRetry} className="underline font-medium shrink-0">

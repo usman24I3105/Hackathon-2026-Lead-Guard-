@@ -1,7 +1,9 @@
-import type { Availability, Appointment, CustomField, Lead, Payment, TeamMember, TimelineEvent } from "../mock/types";
+import type { Availability, Appointment, Company, Contact, CustomField, Lead, Opportunity, Payment, TeamMember, TimelineEvent } from "../mock/types";
 import type { RealtimeEvent } from "../mock/store";
 import type { State } from "../mock/store";
 import type { Session } from "../lib/session";
+import type { DashboardData, DashboardScope } from "../api/types/dashboard";
+import type { SearchResult, Workspace } from "../api/types/shell";
 
 export type { State, RealtimeEvent };
 
@@ -23,8 +25,12 @@ export interface StoreLike {
 
   acknowledgeLead(leadId: string, userId: string): void;
   createLead(input: { name: string; phone: string; message: string; source: string }): Lead;
+  createContact(input: { name: string; phone: string; ownerId: string }): Contact;
+  createCompany(input: { name: string; contactIds: string[] }): Company;
+  createOpportunity(input: { title: string; contactId: string; stageId: string; valueCents: number | null }): Opportunity;
   setAvailability(userId: string, availability: Availability): void;
   setTeamFlags(userId: string, patch: Partial<TeamMember>): void;
+  setAssignmentRules(rules: { acknowledgementSeconds: number; backupOwnerId: string; managerOwnerId: string }): void;
   reassignLead(leadId: string, userId: string): void;
   moveOpportunity(
     oppId: string,
@@ -38,6 +44,8 @@ export interface StoreLike {
   bookAppointment(contactId: string, title: string, start: string, end: string): Appointment;
   cancelAppointment(id: string): void;
   addStage(name: string): void;
+  setStageConfig(id: string, patch: { requiredFields?: string[]; isClosed?: boolean }): void;
+  reorderStage(id: string, targetIndex: number): void;
   renameStage(id: string, name: string): void;
   deleteStage(id: string, targetStageId: string): void;
   addCustomField(field: Omit<CustomField, "id">): void;
@@ -46,4 +54,12 @@ export interface StoreLike {
   setDemoMode(on: boolean): void;
   runBatonDemo(): Lead;
   getTimeline(leadId: string): TimelineEvent[];
+
+  /** GET /api/dashboard — the server applies scope and permission masking. */
+  getDashboard(scope: DashboardScope): Promise<DashboardData>;
+
+  listWorkspaces(): Promise<Workspace[]>;
+  /** Switches the session's active workspace server-side; caller reloads after. */
+  switchWorkspace(id: string): Promise<void>;
+  search(query: string): Promise<SearchResult[]>;
 }

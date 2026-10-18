@@ -9,10 +9,10 @@ const LABEL: Record<Availability, string> = {
 };
 
 const DOT: Record<Availability, string> = {
-  available: "#0F766E",
-  busy: "#F2A81D",
-  leave: "#4B5563",
-  offline: "#9CA3AF",
+  available: "var(--success)",
+  busy: "var(--danger)",
+  leave: "var(--warning)",
+  offline: "var(--neutral-text)",
 };
 
 export function Avatar({
@@ -21,15 +21,17 @@ export function Avatar({
   size = 32,
   availability,
   showLabel = false,
+  title,
 }: {
   name: string;
   color: string;
-  size?: 24 | 32 | 48;
+  size?: number;
   availability?: Availability;
   showLabel?: boolean;
+  title?: string;
 }) {
   return (
-    <div className="inline-flex items-center gap-2">
+    <div className="inline-flex items-center gap-2" title={title}>
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <div
           className="flex items-center justify-center rounded-full text-white font-semibold"

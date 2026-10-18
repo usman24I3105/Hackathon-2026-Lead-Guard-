@@ -13,6 +13,13 @@ import Recovery from "./features/recovery/Recovery";
 import Audit from "./features/audit/Audit";
 import Integrations from "./features/integrations/Integrations";
 import Settings from "./features/settings/Settings";
+import LeadDirectory from "./features/relay/LeadDirectory";
+import { Companies, CompanyDetail } from "./features/contacts/Companies";
+import Opportunities from "./features/pipeline/Opportunities";
+import Inbox from "./features/contacts/Inbox";
+import Payments from "./features/contacts/Payments";
+import Appointments from "./features/contacts/Appointments";
+import TeamWorkspace from "./features/settings/TeamWorkspace";
 import PublicForm from "./features/publicform/PublicForm";
 
 export function AppRoutes() {
@@ -29,7 +36,22 @@ export function AppRoutes() {
           </RequireAuth>
         }
       >
-        <Route path="/relay" element={<Relay />} />
+        <Route
+          path="/relay"
+          element={
+            <RequirePermission permission="leads.view">
+              <Relay />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/leads"
+          element={
+            <RequirePermission permission="leads.view">
+              <LeadDirectory />
+            </RequirePermission>
+          }
+        />
         <Route
           path="/pipeline"
           element={
@@ -41,6 +63,62 @@ export function AppRoutes() {
         <Route path="/contacts" element={<ContactsList />} />
         <Route path="/contacts/:id" element={<Contact360 />} />
         <Route
+          path="/companies"
+          element={
+            <RequirePermission permission="contacts.view">
+              <Companies />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/companies/:id"
+          element={
+            <RequirePermission permission="contacts.view">
+              <CompanyDetail />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/opportunities"
+          element={
+            <RequirePermission permission="pipeline.manage">
+              <Opportunities />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/conversations"
+          element={
+            <RequirePermission permission="contacts.view">
+              <Inbox />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/appointments"
+          element={
+            <RequirePermission permission="contacts.view">
+              <Appointments />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/payments"
+          element={
+            <RequirePermission permission="contacts.view">
+              <Payments />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/team"
+          element={
+            <RequirePermission permission="leads.view">
+              <TeamWorkspace />
+            </RequirePermission>
+          }
+        />
+        <Route
           path="/dashboard"
           element={
             <RequirePermission permission="dashboard.full">
@@ -48,7 +126,14 @@ export function AppRoutes() {
             </RequirePermission>
           }
         />
-        <Route path="/recovery" element={<Recovery />} />
+        <Route
+          path="/recovery"
+          element={
+            <RequirePermission permission="leads.view">
+              <Recovery />
+            </RequirePermission>
+          }
+        />
         <Route
           path="/audit"
           element={

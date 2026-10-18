@@ -46,7 +46,11 @@ export function CountdownRing({
           style={{ transition: mode === "running" ? "stroke-dashoffset 0.25s linear" : "stroke-dashoffset 0.3s ease-out, stroke 0.3s" }}
         />
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center font-mono-tab text-xs" style={{ color }}>
+      {/* Amber is fine for the ring stroke but fails contrast as text, so the numeral uses the darker shade. */}
+      <div
+        className="absolute inset-0 flex items-center justify-center font-mono-tab text-xs"
+        style={{ color: mode === "running" ? "var(--warning-text)" : color }}
+      >
         {mode === "acknowledged" ? "✓" : mode === "overdue" ? "⚠" : mode === "held" ? "–" : left}
       </div>
     </div>

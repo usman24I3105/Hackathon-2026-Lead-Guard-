@@ -2,6 +2,7 @@ import {
   appointments as seedAppointments,
   auditLog as seedAudit,
   contacts as seedContacts,
+  companies as seedCompanies,
   customFields as seedFields,
   freshLead,
   initialLeads,
@@ -17,6 +18,7 @@ import type {
   AuditEntry,
   Availability,
   Contact,
+  Company,
   CustomField,
   Integration,
   Lead,
@@ -28,6 +30,10 @@ import type {
   TimelineEvent,
 } from "./types";
 import type { StoreLike } from "../state/storeTypes";
+import type { DashboardData, DashboardScope } from "../api/types/dashboard";
+import type { SearchResult, Workspace } from "../api/types/shell";
+import { getSession } from "../lib/session";
+import { buildDashboard } from "./dashboard";
 
 export type RealtimeEvent =
   | { type: "lead.created"; leadId: string }
@@ -45,6 +51,7 @@ export interface State {
   stages: StageDef[];
   customFields: CustomField[];
   contacts: Contact[];
+  companies: Company[];
   opportunities: Opportunity[];
   messages: Message[];
   payments: Payment[];
@@ -54,6 +61,7 @@ export interface State {
   timelines: Record<string, TimelineEvent[]>;
   currentUserId: string;
   demoMode: boolean;
+  assignmentRules: { acknowledgementSeconds: number; backupOwnerId: string; managerOwnerId: string };
 }
 
 type Listener = () => void;
@@ -75,6 +83,7 @@ export class Store implements StoreLike {
       stages: seedStages,
       customFields: seedFields,
       contacts: seedContacts,
+      companies: seedCompanies,
       opportunities: seedOpportunities,
       messages: seedMessages,
       payments: seedPayments,
@@ -84,6 +93,11 @@ export class Store implements StoreLike {
       timelines: {},
       currentUserId: "u-imran",
       demoMode: false,
+      assignmentRules: {
+        acknowledgementSeconds: 10,
+        backupOwnerId: seedTeam[1]?.id ?? seedTeam[0]?.id ?? "",
+        managerOwnerId: seedTeam.find((member) => member.role === "Manager")?.id ?? seedTeam[0]?.id ?? "",
+      },
     };
     this.startTicking();
   }
@@ -162,7 +176,7 @@ export class Store implements StoreLike {
         status: "escalated" as const,
         level: nextLevel,
         ownerId: nextOwnerId,
-        ackDeadline: new Date(now + 10_000).toISOString(),
+        ackDeadline: new Date(now + this.state.assignmentRules.acknowledgementSeconds * 1000).toISOString(),
       };
     });
     if (changed) this.set({ leads });
@@ -211,12 +225,61 @@ export class Store implements StoreLike {
 
   createLead(input: { name: string; phone: string; message: string; source: string }) {
     const availableMember = this.state.team.find((m) => m.availability === "available" && m.inRotation) ?? this.state.team[0];
-    const path = this.state.team.filter((m) => m.inRotation).map((m) => m.id);
-    const lead = freshLead({ ...input, ownerId: availableMember.id, escalationPath: path.length ? path : [availableMember.id] });
+    const inRotation = new Set(this.state.team.filter((member) => member.inRotation).map((member) => member.id));
+    const path = [availableMember.id, this.state.assignmentRules.backupOwnerId, this.state.assignmentRules.managerOwnerId]
+      .filter((id, index, all) => !!id && inRotation.has(id) && all.indexOf(id) === index);
+    const lead = freshLead({
+      ...input,
+      ownerId: availableMember.id,
+      ackDeadline: new Date(Date.now() + this.state.assignmentRules.acknowledgementSeconds * 1000).toISOString(),
+      escalationPath: path.length ? path : [availableMember.id],
+    });
     this.set((s) => ({ leads: [lead, ...s.leads] }));
     this.addTimeline(lead.id, `New lead captured from ${input.source}`);
     this.emit({ type: "lead.created", leadId: lead.id });
     return lead;
+  }
+
+  createContact(input: { name: string; phone: string; ownerId: string }) {
+    const contact: Contact = {
+      id: uid("c"),
+      name: input.name.trim(),
+      phone: input.phone.trim(),
+      ownerId: input.ownerId,
+      optedOut: false,
+      createdAt: new Date().toISOString(),
+    };
+    this.set((s) => ({ contacts: [contact, ...s.contacts] }));
+    this.addAudit({ type: "contact.created", userName: "You", after: contact.name });
+    return contact;
+  }
+
+  createCompany(input: { name: string; contactIds: string[] }) {
+    const company: Company = {
+      id: uid("co"),
+      name: input.name.trim(),
+      contactIds: [...new Set(input.contactIds)],
+      createdAt: new Date().toISOString(),
+    };
+    this.set((s) => ({ companies: [company, ...s.companies] }));
+    this.addAudit({ type: "company.created", userName: "You", after: company.name });
+    return company;
+  }
+
+  createOpportunity(input: { title: string; contactId: string; stageId: string; valueCents: number | null }) {
+    const opportunity: Opportunity = {
+      id: uid("op"),
+      contactId: input.contactId,
+      title: input.title.trim(),
+      stageId: input.stageId,
+      valueCents: input.valueCents,
+      fields: {},
+      createdAt: new Date().toISOString(),
+    };
+    this.set((s) => ({ opportunities: [opportunity, ...s.opportunities] }));
+    const stage = this.state.stages.find((item) => item.id === input.stageId);
+    this.addAudit({ type: "opportunity.created", userName: "You", after: `${opportunity.title} · ${stage?.name ?? "New"}` });
+    return opportunity;
   }
 
   setAvailability(userId: string, availability: Availability) {
@@ -230,7 +293,7 @@ export class Store implements StoreLike {
         this.set((s) => ({
           leads: s.leads.map((l) =>
             l.ownerId === userId && (l.status === "waiting" || l.status === "escalated")
-              ? { ...l, ownerId: fallback.id, ackDeadline: new Date(Date.now() + 10_000).toISOString() }
+              ? { ...l, ownerId: fallback.id, ackDeadline: new Date(Date.now() + this.state.assignmentRules.acknowledgementSeconds * 1000).toISOString() }
               : l
           ),
         }));
@@ -242,12 +305,29 @@ export class Store implements StoreLike {
     this.set((s) => ({ team: s.team.map((m) => (m.id === userId ? { ...m, ...patch } : m)) }));
   }
 
+  setAssignmentRules(rules: { acknowledgementSeconds: number; backupOwnerId: string; managerOwnerId: string }) {
+    const validIds = new Set(this.state.team.map((member) => member.id));
+    if (!Number.isInteger(rules.acknowledgementSeconds) || rules.acknowledgementSeconds < 5 || rules.acknowledgementSeconds > 300) {
+      throw new Error("Acknowledgement window must be between 5 and 300 seconds.");
+    }
+    const backup = this.state.team.find((member) => member.id === rules.backupOwnerId);
+    const manager = this.state.team.find((member) => member.id === rules.managerOwnerId);
+    if (!validIds.has(rules.backupOwnerId) || !validIds.has(rules.managerOwnerId) || !backup?.inRotation || !manager?.inRotation) {
+      throw new Error("Choose team members who are in the assignment rotation.");
+    }
+    if (manager.role === "User") {
+      throw new Error("Choose an owner or manager for the manager escalation step.");
+    }
+    this.set({ assignmentRules: { ...rules } });
+    this.addAudit({ type: "assignment.rules_updated", userName: "You", after: `${rules.acknowledgementSeconds}s acknowledgement window` });
+  }
+
   reassignLead(leadId: string, userId: string) {
     const member = this.state.team.find((m) => m.id === userId);
     this.set((s) => ({
       leads: s.leads.map((l) =>
         l.id === leadId
-          ? { ...l, ownerId: userId, status: "waiting", level: 1, ackDeadline: new Date(Date.now() + 10_000).toISOString(), recoveryReason: undefined }
+          ? { ...l, ownerId: userId, status: "waiting", level: 1, ackDeadline: new Date(Date.now() + this.state.assignmentRules.acknowledgementSeconds * 1000).toISOString(), recoveryReason: undefined }
           : l
       ),
     }));
@@ -331,6 +411,26 @@ export class Store implements StoreLike {
     this.set((s) => ({ stages: [...s.stages, stage] }));
   }
 
+  setStageConfig(id: string, patch: { requiredFields?: string[]; isClosed?: boolean }) {
+    const existing = this.state.stages.find((stage) => stage.id === id);
+    if (!existing) return;
+    const validFields = new Set(this.state.customFields.map((field) => field.label));
+    const requiredFields = patch.requiredFields ?? existing.requiredFields;
+    if (requiredFields.some((field) => !validFields.has(field))) throw new Error("A required field no longer exists.");
+    this.set((s) => ({ stages: s.stages.map((stage) => stage.id === id ? { ...stage, ...patch, requiredFields: [...requiredFields] } : stage) }));
+    this.addAudit({ type: "stage.config_updated", userName: "You", before: existing.name, after: patch.isClosed === undefined ? "Required fields updated" : patch.isClosed ? "Closed" : "Open" });
+  }
+
+  reorderStage(id: string, targetIndex: number) {
+    const stages = [...this.state.stages];
+    const currentIndex = stages.findIndex((stage) => stage.id === id);
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= stages.length) return;
+    const [stage] = stages.splice(currentIndex, 1);
+    stages.splice(targetIndex, 0, stage);
+    this.set({ stages });
+    this.addAudit({ type: "stage.reordered", userName: "You", after: stage.name });
+  }
+
   renameStage(id: string, name: string) {
     const prior = this.state.stages.find((s) => s.id === id)?.name;
     this.set((s) => ({ stages: s.stages.map((st) => (st.id === id ? { ...st, name } : st)) }));
@@ -369,6 +469,34 @@ export class Store implements StoreLike {
 
   getTimeline(leadId: string) {
     return this.state.timelines[leadId] ?? [];
+  }
+
+  async getDashboard(scope: DashboardScope): Promise<DashboardData> {
+    return buildDashboard(this.state, getSession(), scope);
+  }
+
+  async listWorkspaces(): Promise<Workspace[]> {
+    const name = getSession()?.workspace ?? "LeadGuard Roofing";
+    return [{ id: "ws-1", name, current: true }];
+  }
+
+  async switchWorkspace(): Promise<void> {
+    // Mock mode has a single workspace; nothing to switch to.
+  }
+
+  async search(query: string): Promise<SearchResult[]> {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const digits = q.replace(/\D/g, "");
+    const matches = (name: string, phone: string) =>
+      name.toLowerCase().includes(q) || (digits.length >= 3 && phone.replace(/\D/g, "").includes(digits));
+    const contacts: SearchResult[] = this.state.contacts
+      .filter((c) => matches(c.name, c.phone))
+      .map((c) => ({ kind: "contact", id: c.id, title: c.name, subtitle: `Contact · ${c.phone}` }));
+    const leads: SearchResult[] = this.state.leads
+      .filter((l) => matches(l.name, l.phone))
+      .map((l) => ({ kind: "lead", id: l.id, title: l.name, subtitle: `Lead · ${l.source}` }));
+    return [...contacts, ...leads].slice(0, 8);
   }
 }
 

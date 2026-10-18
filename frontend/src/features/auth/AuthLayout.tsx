@@ -8,7 +8,7 @@ export function AuthLayout({ children, title, subtitle }: { children: ReactNode;
           <div className="font-display text-3xl mb-1">LeadGuard</div>
           <p className="text-sm text-ink-2">Every lead gets a reply. Every time.</p>
         </div>
-        <div className="bg-surface border border-line rounded-[10px] p-6 sm:p-8">
+        <div className="bg-surface border border-line rounded-card p-6 sm:p-8">
           <h1 className="text-xl font-semibold mb-1">{title}</h1>
           <p className="text-sm text-ink-2 mb-6">{subtitle}</p>
           {children}

@@ -8,46 +8,50 @@ const OPTIONS: Availability[] = ["available", "busy", "leave", "offline"];
 export function TeamStrip() {
   const { team, leads } = useStoreState();
   const { session } = useAuth();
+  const available = team.filter((member) => member.availability === "available").length;
 
   return (
-    <div className="flex items-center gap-4 overflow-x-auto px-4 sm:px-6 py-4 border-b border-line bg-surface">
-      {team.map((m) => {
-        const activeCount = leads.filter((l) => l.ownerId === m.id && (l.status === "waiting" || l.status === "escalated")).length;
-        const isMe = m.id === session?.userId;
-        return (
-          <div key={m.id} className="flex flex-col items-center gap-1.5 shrink-0 min-w-[84px]">
-            <div className="relative">
-              <Avatar name={m.name} color={m.avatarColor} size={48} availability={m.availability} />
-              {activeCount > 0 && (
-                <span
-                  className="absolute -top-1 -left-1 flex items-center justify-center rounded-full bg-alarm text-white text-[10px] font-semibold"
-                  style={{ width: 18, height: 18 }}
-                  aria-label={`${activeCount} active leads`}
-                >
-                  {activeCount}
-                </span>
-              )}
-            </div>
-            <span className="text-xs font-medium text-ink text-center leading-tight">{m.name.split(" ")[0]}</span>
-            {isMe ? (
-              <select
-                aria-label="Your availability"
-                value={m.availability}
-                onChange={(e) => store.setAvailability(m.id, e.target.value as Availability)}
-                className="text-[11px] rounded-full border border-line px-2 py-0.5 bg-paper"
-              >
-                {OPTIONS.map((o) => (
-                  <option key={o} value={o}>
-                    {o === "leave" ? "On leave" : o[0].toUpperCase() + o.slice(1)}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="text-[11px] text-ink-2">{m.availability === "leave" ? "On leave" : m.availability[0].toUpperCase() + m.availability.slice(1)}</span>
-            )}
-          </div>
-        );
-      })}
-    </div>
+    <section className="relay-roster" aria-labelledby="relay-roster-title">
+      <div className="relay-roster-heading">
+        <div>
+          <h2 id="relay-roster-title">On shift</h2>
+          <p>{available} of {team.length} available</p>
+        </div>
+      </div>
+      <ul className="relay-roster-list">
+        {team.map((member) => {
+          const activeCount = leads.filter((lead) => lead.ownerId === member.id && (lead.status === "waiting" || lead.status === "escalated")).length;
+          const isMe = member.id === session?.userId;
+          return (
+            <li key={member.id} className="relay-roster-member">
+              <Avatar name={member.name} color={member.avatarColor} size={36} availability={member.availability} title={`${member.name} · ${member.availability}`} />
+              <div className="relay-roster-person">
+                <span className="relay-roster-name">{member.name.split(" ")[0]}{isMe ? <span className="relay-you">You</span> : null}</span>
+                {isMe ? (
+                  <label className="relay-availability-label">
+                    <span className="sr-only">Your availability</span>
+                    <select
+                      aria-label="Your availability"
+                      value={member.availability}
+                      onChange={(event) => store.setAvailability(member.id, event.target.value as Availability)}
+                    >
+                      {OPTIONS.map((option) => (
+                        <option key={option} value={option}>{option === "leave" ? "On leave" : option[0].toUpperCase() + option.slice(1)}</option>
+                      ))}
+                    </select>
+                    <span className={`relay-availability-dot is-${member.availability}`} aria-hidden="true" />
+                  </label>
+                ) : (
+                  <span className="relay-roster-status"><span className={`relay-availability-dot is-${member.availability}`} aria-hidden="true" />{member.availability === "leave" ? "On leave" : member.availability[0].toUpperCase() + member.availability.slice(1)}</span>
+                )}
+              </div>
+              <span className="relay-roster-workload" aria-label={`${activeCount} active leads`}>
+                <strong>{activeCount}</strong><span>{activeCount === 1 ? "lead" : "leads"}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

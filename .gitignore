@@ -22,3 +22,7 @@ npm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+backend/calendar_tokens.json
+backend/leads.csv
+backend/node_modules
+API_KEYS.md

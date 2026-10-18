@@ -7,7 +7,7 @@ export function SessionExpiredDialog() {
   return (
     <div
       role="alert"
-      className="text-sm rounded-[10px] border px-3 py-2.5 mb-4"
+      className="text-sm rounded-card border px-3 py-2.5 mb-4"
       style={{ borderColor: "var(--signal)", background: "var(--warn-bg)" }}
     >
       Your session ended. Sign in again to pick up where you left off.

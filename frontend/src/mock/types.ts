@@ -10,6 +10,8 @@ export interface TeamMember {
   inRotation: boolean;
   avatarColor: string;
   telegramChatId?: string;
+  /** Max open leads this person should hold at once (open-lead ratio). */
+  capacity: number;
 }
 
 export type LeadStatus = "waiting" | "acknowledged" | "escalated" | "overdue" | "recovery";
@@ -36,6 +38,8 @@ export interface StageDef {
   id: string;
   name: string;
   requiredFields: string[];
+  /** Won/Lost-style stages, excluded from "open pipeline" value. */
+  isClosed?: boolean;
 }
 
 export interface Opportunity {
@@ -96,6 +100,14 @@ export interface Contact {
   phone: string;
   ownerId: string;
   optedOut: boolean;
+  createdAt: string;
+}
+
+/** Company directory data exists only in the local preview fixtures for now. */
+export interface Company {
+  id: string;
+  name: string;
+  contactIds: string[];
   createdAt: string;
 }
 

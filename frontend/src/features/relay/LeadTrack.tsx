@@ -1,49 +1,56 @@
-import { useStoreState } from "../../state/useStore";
+import type { CSSProperties } from "react";
 import { Avatar } from "../../components/Avatar";
+import { CountdownRing } from "../../components/CountdownRing";
+import { StatusChip } from "../../components/StatusChip";
+import { useStoreState } from "../../state/useStore";
 import type { Lead } from "../../mock/types";
 
 export function LeadTrack({ lead }: { lead: Lead }) {
   const { team } = useStoreState();
-  const path = lead.escalationPath.length ? lead.escalationPath : team.map((m) => m.id);
-  const idx = Math.max(0, path.indexOf(lead.ownerId));
-  const pct = path.length > 1 ? (idx / (path.length - 1)) * 100 : 0;
-  const atEnd = lead.status === "acknowledged";
+  const path = lead.escalationPath.length ? lead.escalationPath : team.map((member) => member.id);
+  const index = Math.max(0, path.indexOf(lead.ownerId));
+  const progress = path.length > 1 ? (index / (path.length - 1)) * 100 : 0;
+  const owner = team.find((member) => member.id === lead.ownerId);
+  const isEscalated = lead.status === "escalated";
+  const pathStyle = {
+    "--relay-stops": Math.max(path.length, 1),
+    "--relay-inset": `${path.length > 1 ? 50 / path.length : 50}%`,
+  } as CSSProperties;
 
   return (
-    <div className="px-4 sm:px-6 py-5 border-b border-line bg-surface">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium">
-          Live: <span className="text-ink-2">{lead.name}</span>
-        </span>
-        <span className="text-xs text-ink-2">
-          {atEnd ? `Acknowledged in ${lead.ttfrSeconds}s` : `Level ${lead.level} of 3`}
-        </span>
-      </div>
-      <div className="relative h-14">
-        <div className="absolute left-4 right-4 top-1/2 h-0.5 bg-line" aria-hidden />
-        <div
-          className="absolute top-1/2 -translate-y-1/2 h-5 w-5 rounded-full border-2 border-surface shadow transition-all duration-500"
-          style={{
-            left: `calc(16px + (100% - 32px) * ${pct / 100})`,
-            background: atEnd ? "var(--safe)" : "var(--signal)",
-            transform: "translate(-50%, -50%)",
-          }}
-          aria-hidden
-        />
-        <div className="relative flex justify-between">
-          {path.map((userId, i) => {
-            const m = team.find((t) => t.id === userId);
-            if (!m) return <span key={userId} />;
-            const reached = i <= idx;
-            return (
-              <div key={userId} className="flex flex-col items-center gap-1" style={{ opacity: reached ? 1 : 0.45 }}>
-                <Avatar name={m.name} color={m.avatarColor} size={32} />
-                <span className="text-[11px] text-ink-2">{m.name.split(" ")[0]}</span>
-              </div>
-            );
-          })}
+    <section className="relay-handoff" aria-labelledby="relay-handoff-title">
+      <div className="relay-handoff-main">
+        <div className="relay-handoff-copy">
+          <div className="relay-handoff-label">
+            <span className="relay-live-dot" aria-hidden="true" />
+            <span>Live handoff</span>
+            <StatusChip kind={isEscalated ? "escalated" : "waiting"} />
+          </div>
+          <h2 id="relay-handoff-title">{lead.name}</h2>
+          <p>{lead.source} enquiry <span aria-hidden="true">·</span> {owner ? `Owned by ${owner.name}` : "Owner not assigned"}</p>
+        </div>
+        <div className="relay-handoff-timer">
+          <CountdownRing ackDeadline={lead.ackDeadline} mode={isEscalated ? "overdue" : "running"} size={48} />
+          <div><strong>{isEscalated ? "Response overdue" : "Response window"}</strong><span>{isEscalated ? `Escalation ${lead.level} of 3` : "Waiting for acknowledgement"}</span></div>
         </div>
       </div>
-    </div>
+
+      <div className="relay-path" style={pathStyle} aria-label={`Handoff path, current owner ${owner?.name ?? "unassigned"}`}>
+        <div className="relay-path-rail" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>
+        {path.map((userId, step) => {
+          const member = team.find((person) => person.id === userId);
+          if (!member) return <span key={userId} />;
+          const reached = step <= index;
+          const current = step === index;
+          return (
+            <div key={userId} className={`relay-path-stop ${reached ? "is-reached" : ""} ${current ? "is-current" : ""}`}>
+              <div className="relay-path-avatar"><Avatar name={member.name} color={member.avatarColor} size={30} /></div>
+              <span className="relay-path-name">{member.name.split(" ")[0]}</span>
+              <span className="relay-path-role">{current ? "Current owner" : step < index ? "Previous owner" : `Escalation ${step + 1}`}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

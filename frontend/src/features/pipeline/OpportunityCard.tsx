@@ -26,7 +26,7 @@ export function OpportunityCard({
     <div
       draggable={draggable}
       onDragStart={(e) => e.dataTransfer.setData("text/opp-id", opp.id)}
-      className="bg-surface border border-line rounded-[10px] p-3 flex flex-col gap-1.5 shadow-sm cursor-grab active:cursor-grabbing"
+      className="bg-surface border border-line rounded-card p-3 flex flex-col gap-1.5 shadow-sm cursor-grab active:cursor-grabbing"
     >
       <div className="text-sm font-medium leading-snug">{opp.title}</div>
       <div className="text-xs text-ink-2">{contact?.name}</div>
@@ -42,7 +42,7 @@ export function OpportunityCard({
             Move to…
           </button>
           {menuOpen && (
-            <ul role="menu" className="absolute right-0 bottom-full mb-1 bg-surface border border-line rounded-[10px] shadow-lg py-1 w-40 z-10">
+            <ul role="menu" className="absolute right-0 bottom-full mb-1 bg-surface border border-line rounded-card shadow-lg py-1 w-40 z-10">
               {stages.filter((s) => s.id !== opp.stageId).map((s) => (
                 <li key={s.id}>
                   <button

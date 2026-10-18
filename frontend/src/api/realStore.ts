@@ -1,13 +1,18 @@
 import { apiFetch } from "./client";
 import { ApiError } from "./errors";
 import type { AuthResult, State, StoreLike } from "../state/storeTypes";
+import type { DashboardData, DashboardScope } from "./types/dashboard";
+import type { SearchResult, Workspace } from "./types/shell";
 import type {
   Appointment,
   Availability,
+  Company,
+  Contact,
   CustomField,
   Lead,
   Payment,
   TeamMember,
+  Opportunity,
   TimelineEvent,
 } from "../mock/types";
 
@@ -25,6 +30,7 @@ const EMPTY_STATE: State = {
   stages: [],
   customFields: [],
   contacts: [],
+  companies: [],
   opportunities: [],
   messages: [],
   payments: [],
@@ -34,6 +40,7 @@ const EMPTY_STATE: State = {
   timelines: {},
   currentUserId: "",
   demoMode: false,
+  assignmentRules: { acknowledgementSeconds: 10, backupOwnerId: "", managerOwnerId: "" },
 };
 
 type ErrorReporter = (error: ApiError) => void;
@@ -96,12 +103,28 @@ class RealStore implements StoreLike {
     throw new ApiError(501, "not_configured", "Lead creation needs a connected backend.");
   }
 
+  createCompany(_input: { name: string; contactIds: string[] }): Company {
+    throw new ApiError(501, "not_configured", "Company records need a connected backend.");
+  }
+
+  createContact(_input: { name: string; phone: string; ownerId: string }): Contact {
+    throw new ApiError(501, "not_configured", "Contact creation needs a connected backend.");
+  }
+
+  createOpportunity(_input: { title: string; contactId: string; stageId: string; valueCents: number | null }): Opportunity {
+    throw new ApiError(501, "not_configured", "Opportunity creation needs a connected backend.");
+  }
+
   setAvailability(userId: string, availability: Availability) {
     fireAndForget(apiFetch(`/team/${userId}/availability`, { method: "PATCH", body: JSON.stringify({ availability }) }));
   }
 
   setTeamFlags(userId: string, patch: Partial<TeamMember>) {
     fireAndForget(apiFetch(`/team/${userId}`, { method: "PATCH", body: JSON.stringify(patch) }));
+  }
+
+  setAssignmentRules(_rules: { acknowledgementSeconds: number; backupOwnerId: string; managerOwnerId: string }) {
+    throw new ApiError(501, "not_configured", "Assignment settings need a connected backend.");
   }
 
   reassignLead(leadId: string, userId: string) {
@@ -143,6 +166,14 @@ class RealStore implements StoreLike {
     fireAndForget(apiFetch("/stages", { method: "POST", body: JSON.stringify({ name }) }));
   }
 
+  setStageConfig(_id: string, _patch: { requiredFields?: string[]; isClosed?: boolean }) {
+    throw new ApiError(501, "not_configured", "Pipeline configuration needs a connected backend.");
+  }
+
+  reorderStage(_id: string, _targetIndex: number) {
+    throw new ApiError(501, "not_configured", "Pipeline ordering needs a connected backend.");
+  }
+
   renameStage(id: string, name: string) {
     fireAndForget(apiFetch(`/stages/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }));
   }
@@ -169,6 +200,22 @@ class RealStore implements StoreLike {
 
   runBatonDemo(): Lead {
     throw new ApiError(501, "not_configured", "The demo lead is only available in mock mode.");
+  }
+
+  getDashboard(scope: DashboardScope): Promise<DashboardData> {
+    return apiFetch<DashboardData>(`/dashboard?scope=${encodeURIComponent(scope)}`);
+  }
+
+  listWorkspaces(): Promise<Workspace[]> {
+    return apiFetch<Workspace[]>("/workspaces");
+  }
+
+  async switchWorkspace(id: string): Promise<void> {
+    await apiFetch<void>(`/workspaces/${encodeURIComponent(id)}/switch`, { method: "POST" });
+  }
+
+  search(query: string): Promise<SearchResult[]> {
+    return apiFetch<SearchResult[]>(`/search?q=${encodeURIComponent(query)}`);
   }
 
   getTimeline(leadId: string): TimelineEvent[] {

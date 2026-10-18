@@ -24,7 +24,7 @@ export default function Integrations() {
       </div>
 
       <h2 className="text-sm font-semibold text-ink-2 uppercase tracking-wide mb-3">Event log</h2>
-      <div className="bg-surface border border-line rounded-[10px] divide-y divide-line">
+      <div className="bg-surface border border-line rounded-card divide-y divide-line">
         {events.length === 0 ? (
           <p className="text-sm text-ink-2 p-4">No integration events yet.</p>
         ) : (

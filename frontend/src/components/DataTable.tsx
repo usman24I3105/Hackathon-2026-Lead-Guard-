@@ -73,14 +73,14 @@ export function DataTable<T extends { id: string }>({
           </span>
           <div className="flex gap-2">
             <button
-              className="px-3 h-9 rounded-[10px] border border-line disabled:opacity-40"
+              className="px-3 h-9 rounded-card border border-line disabled:opacity-40"
               disabled={current === 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
             >
               Prev
             </button>
             <button
-              className="px-3 h-9 rounded-[10px] border border-line disabled:opacity-40"
+              className="px-3 h-9 rounded-card border border-line disabled:opacity-40"
               disabled={current >= totalPages - 1}
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
             >

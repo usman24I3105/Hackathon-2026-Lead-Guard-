@@ -2,6 +2,7 @@ import type {
   Appointment,
   AuditEntry,
   Contact,
+  Company,
   CustomField,
   Integration,
   Lead,
@@ -16,18 +17,18 @@ const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString(
 const secondsFromNow = (s: number) => new Date(Date.now() + s * 1000).toISOString();
 
 export const team: TeamMember[] = [
-  { id: "u-imran", name: "Imran Qureshi", role: "User", availability: "available", inRotation: true, avatarColor: "#1D4ED8" },
-  { id: "u-dana", name: "Dana Cole", role: "Manager", availability: "available", inRotation: true, avatarColor: "#0F766E" },
-  { id: "u-sara", name: "Sara Malik", role: "User", availability: "available", inRotation: true, avatarColor: "#C2361B" },
-  { id: "u-owais", name: "Owais Tariq", role: "Owner", availability: "busy", inRotation: true, avatarColor: "#F2A81D" },
+  { id: "u-imran", name: "Imran Qureshi", role: "User", availability: "available", inRotation: true, avatarColor: "#1D4ED8", capacity: 10 },
+  { id: "u-dana", name: "Dana Cole", role: "Manager", availability: "available", inRotation: true, avatarColor: "#0F766E", capacity: 12 },
+  { id: "u-sara", name: "Sara Malik", role: "User", availability: "available", inRotation: true, avatarColor: "#C2361B", capacity: 10 },
+  { id: "u-owais", name: "Owais Tariq", role: "Owner", availability: "busy", inRotation: true, avatarColor: "#F2A81D", capacity: 6 },
 ];
 
 export const stages: StageDef[] = [
   { id: "st-new", name: "New", requiredFields: [] },
   { id: "st-contacted", name: "Contacted", requiredFields: [] },
   { id: "st-quoted", name: "Quoted", requiredFields: ["Roof type"] },
-  { id: "st-won", name: "Won", requiredFields: ["Roof type", "Contract value"] },
-  { id: "st-lost", name: "Lost", requiredFields: [] },
+  { id: "st-won", name: "Won", requiredFields: ["Roof type", "Contract value"], isClosed: true },
+  { id: "st-lost", name: "Lost", requiredFields: [], isClosed: true },
 ];
 
 export const customFields: CustomField[] = [
@@ -44,6 +45,13 @@ export const contacts: Contact[] = [
   { id: "c-003", name: "Jason Flores", phone: "+1 555-0177", ownerId: "u-sara", optedOut: true, createdAt: minutesAgo(600) },
   { id: "c-004", name: "Lindsey Carr", phone: "+1 555-0193", ownerId: "u-imran", optedOut: false, createdAt: minutesAgo(90) },
   { id: "c-005", name: "Tomas Reyes", phone: "+1 555-0220", ownerId: "u-dana", optedOut: false, createdAt: minutesAgo(30) },
+];
+
+export const companies: Company[] = [
+  { id: "co-001", name: "Birchwood Properties", contactIds: ["c-001", "c-004"], createdAt: minutesAgo(240) },
+  { id: "co-002", name: "Northstar Homes", contactIds: ["c-002"], createdAt: minutesAgo(180) },
+  { id: "co-003", name: "Sunset Residential", contactIds: ["c-003"], createdAt: minutesAgo(600) },
+  { id: "co-004", name: "Maple Ridge Builders", contactIds: ["c-005"], createdAt: minutesAgo(30) },
 ];
 
 export const opportunities: Opportunity[] = [
@@ -107,3 +115,11 @@ export const initialLeads: Lead[] = [
   freshLead({ name: "Devon Pierce", phone: "+1 555-0388", message: "Interested in solar + roof bundle.", source: "Public form", ownerId: "u-sara", status: "acknowledged", ackDeadline: secondsFromNow(-120), ackedAt: minutesAgo(2), ttfrSeconds: 14 }),
   freshLead({ name: "Wendy Torres", phone: "+1 555-0455", message: "Gutter guards for a two-story house.", source: "Referral", ownerId: "u-dana", status: "acknowledged", ackDeadline: secondsFromNow(-600), ackedAt: minutesAgo(9), ttfrSeconds: 22 }),
 ];
+
+/** Yesterday's / last month's figures, so the mock can report KPI trends. */
+export const previousPeriod = {
+  newLeads: 2,
+  avgResponseSeconds: 24,
+  escalations: 3,
+  collectedCents: 1_850_000,
+};

@@ -43,7 +43,7 @@ export default function Audit() {
         <Input aria-label="From date" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" />
       </div>
 
-      <div className="bg-surface border border-line rounded-[10px]">
+      <div className="bg-surface border border-line rounded-card">
         <DataTable
           emptyTitle="No events match these filters."
           rows={filtered}

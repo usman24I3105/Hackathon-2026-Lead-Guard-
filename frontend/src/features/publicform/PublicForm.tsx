@@ -49,7 +49,7 @@ export default function PublicForm() {
       <p className="text-sm text-ink-2 mb-6">Tell us what's going on — a real person replies within a minute.</p>
 
       {state === "throttled" && (
-        <p className="text-sm rounded-[10px] border px-3 py-2.5 mb-4" style={{ borderColor: "var(--signal)", background: "var(--warn-bg)" }}>
+        <p className="text-sm rounded-card border px-3 py-2.5 mb-4" style={{ borderColor: "var(--signal)", background: "var(--warn-bg)" }}>
           Please try again shortly.
         </p>
       )}
@@ -79,7 +79,7 @@ export default function PublicForm() {
 function PublicShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-paper flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md bg-surface border border-line rounded-[10px] p-6 sm:p-8">
+      <div className="w-full max-w-md bg-surface border border-line rounded-card p-6 sm:p-8">
         <div className="font-display text-lg mb-6 text-ink-2">LeadGuard Roofing</div>
         {children}
       </div>

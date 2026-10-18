@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { Icon } from "../components/icons";
 
 interface Toast {
   id: string;
@@ -15,27 +16,26 @@ const Ctx = createContext<ToastCtx | null>(null);
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  const dismiss = useCallback((id: string) => setToasts((items) => items.filter((toast) => toast.id !== id)), []);
   const push = useCallback((message: string, tone: Toast["tone"] = "success") => {
     const id = Math.random().toString(36).slice(2);
-    setToasts((t) => [...t, { id, message, tone }]);
-    const duration = tone === "error" ? 6000 : 3000;
-    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), duration);
-  }, []);
+    setToasts((items) => [...items, { id, message, tone }]);
+    if (tone !== "error") window.setTimeout(() => dismiss(id), 3200);
+  }, [dismiss]);
 
   return (
     <Ctx.Provider value={{ push }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-[min(90vw,360px)]" aria-live="polite" role="status">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={
-              "rounded-[10px] border px-4 py-3 text-sm shadow-sm bg-surface flex items-start gap-2 " +
-              (t.tone === "error" ? "border-alarm text-alarm" : t.tone === "info" ? "border-focus text-focus" : "border-safe text-safe")
-            }
-          >
-            <span aria-hidden>{t.tone === "error" ? "⚠" : t.tone === "info" ? "ℹ" : "✓"}</span>
-            <span className="text-ink">{t.message}</span>
+      <div className="fixed bottom-20 md:bottom-5 right-4 md:right-6 z-50 flex flex-col gap-2 w-[min(90vw,360px)]" aria-live="polite" aria-relevant="additions text" role="status">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`app-toast is-${toast.tone}`}>
+            <span className="app-toast-icon" aria-hidden="true">
+              <Icon name={toast.tone === "success" ? "check" : toast.tone === "error" ? "recovery" : "activity"} size={15} />
+            </span>
+            <span className="app-toast-message">{toast.message}</span>
+            <button type="button" onClick={() => dismiss(toast.id)} aria-label="Dismiss notification" className="app-toast-dismiss">
+              <Icon name="close" size={14} />
+            </button>
           </div>
         ))}
       </div>
