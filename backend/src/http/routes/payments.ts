@@ -99,8 +99,42 @@ async function handleCreateSession(req: any, res: any, next: any) {
 
 paymentRoutes.post('/checkout', handleCreateSession);
 paymentRoutes.post('/create-checkout-session', handleCreateSession);
+paymentRoutes.post('/create-session', handleCreateSession);
 
-// ── List payments for opportunity ─────────────────────────────────────────────
+// ── List all payments ─────────────────────────────────────────────────────────
+paymentRoutes.get('/', async (req, res, next) => {
+  const r = req as AuthRequest;
+  try {
+    await withTenant(r.workspaceId, async (client) => {
+      const { rows } = await client.query<{
+        id: string;
+        opportunity_id: string | null;
+        contact_id: string | null;
+        status: string;
+        amount_cents: number;
+        refunded_cents: number;
+        created_at: Date;
+      }>(
+        `SELECT p.id, p.opportunity_id, o.contact_id, p.status, p.amount_cents, p.refunded_cents, p.created_at
+         FROM payment p
+         LEFT JOIN opportunity o ON o.id = p.opportunity_id
+         WHERE p.workspace_id = $1
+         ORDER BY p.created_at DESC LIMIT 100`,
+        [r.workspaceId],
+      );
+      res.json({
+        payments: rows.map(r => ({
+          id: r.id,
+          contactId: r.contact_id || '',
+          amountCents: r.amount_cents,
+          status: r.status,
+          memo: 'Payment',
+          createdAt: r.created_at.toISOString(),
+        })),
+      });
+    });
+  } catch (err) { next(err); }
+});
 paymentRoutes.get('/opportunity/:id', async (req, res, next) => {
   const r = req as unknown as AuthRequest;
   try {

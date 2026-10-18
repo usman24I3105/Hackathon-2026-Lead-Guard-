@@ -94,27 +94,250 @@ dashboardRoutes.get('/', async (req, res, next) => {
         availability[row.status] = parseInt(row.count, 10);
       }
 
-      res.json(maskValues({
+      // 12. Fetch recovery items
+      const { rows: recRows } = await client.query<{
+        id: string;
+        name: string;
+        source: string;
+        recovery_reason: string | null;
+        state: string;
+        owner_id: string;
+        owner_name: string;
+        created_at: Date;
+        ack_deadline: Date | null;
+      }>(
+        `SELECT l.id, c.name, l.source, l.recovery_reason, l.state, l.owner_id,
+                COALESCE(u.name, 'Unassigned') AS owner_name,
+                l.created_at, l.ack_deadline
+         FROM lead l
+         JOIN contact c ON c.id = l.contact_id
+         LEFT JOIN "user" u ON u.id = l.owner_id
+         WHERE l.workspace_id = $1 AND l.state IN ('recovery', 'escalated')
+         ORDER BY l.created_at DESC LIMIT 10`,
+        [r.workspaceId],
+      );
+
+      // 13. Fetch team members with status
+      const { rows: teamAvailRows } = await client.query<{
+        id: string;
+        name: string;
+        status: string;
+        open_leads: string;
+      }>(
+        `SELECT u.id, u.name, u.status, COUNT(l.id) AS open_leads
+         FROM "user" u
+         LEFT JOIN lead l ON l.owner_id = u.id AND l.workspace_id = u.workspace_id AND l.state = 'waiting'
+         WHERE u.workspace_id = $1
+         GROUP BY u.id, u.name, u.status
+         ORDER BY u.name ASC`,
+        [r.workspaceId],
+      );
+
+      // 14. Fetch upcoming appointments
+      const { rows: apptList } = await client.query<{
+        id: string;
+        title: string;
+        start_at: Date;
+        contact_id: string;
+        customer_name: string;
+        employee_name: string;
+      }>(
+        `SELECT a.id, a.title, a.start_at, c.id AS contact_id, c.name AS customer_name, u.name AS employee_name
+         FROM appointment a
+         JOIN lead l ON l.id = a.lead_id
+         JOIN contact c ON c.id = l.contact_id
+         JOIN "user" u ON u.id = a.user_id
+         WHERE a.workspace_id = $1 AND a.start_at >= NOW()
+         ORDER BY a.start_at ASC LIMIT 10`,
+        [r.workspaceId],
+      );
+
+      // 15. Fetch recent audit activity
+      const { rows: auditList } = await client.query<{
+        id: string;
+        at: Date;
+        type: string;
+        actor: string;
+      }>(
+        `SELECT id, at, type, actor
+         FROM audit_log
+         WHERE workspace_id = $1
+         ORDER BY at DESC LIMIT 10`,
+        [r.workspaceId],
+      );
+
+      // 16. Fetch leads lists for drill-downs
+      const { rows: todayLeads } = await client.query<{
+        id: string;
+        name: string;
+        source: string;
+        state: string;
+        owner_name: string;
+        created_at: Date;
+      }>(
+        `SELECT l.id, c.name, l.source, l.state, COALESCE(u.name, 'Unassigned') AS owner_name, l.created_at
+         FROM lead l
+         JOIN contact c ON c.id = l.contact_id
+         LEFT JOIN "user" u ON u.id = l.owner_id
+         WHERE l.workspace_id = $1 AND l.created_at > NOW() - INTERVAL '24 hours'
+         ORDER BY l.created_at DESC LIMIT 20`,
+        [r.workspaceId],
+      );
+
+      const recoveryQueue = recRows.map(row => ({
+        leadId: row.id,
+        leadName: row.name,
+        source: row.source,
+        reason: row.recovery_reason || 'Missed SLA window',
+        status: row.state as any,
+        ownerId: row.owner_id,
+        ownerName: row.owner_name,
+        ackDeadline: row.ack_deadline?.toISOString() || row.created_at.toISOString(),
+        createdAt: row.created_at.toISOString(),
+        overdue: true,
+      }));
+
+      const team = teamAvailRows.map((u, i) => ({
+        userId: u.id,
+        name: u.name,
+        avatarColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'][i % 5],
+        availability: (u.status === 'on_leave' ? 'on_leave' : u.status === 'busy' ? 'busy' : 'available') as any,
+        openLeads: parseInt(u.open_leads, 10) || 0,
+        capacity: 5,
+      }));
+
+      const appointments = apptList.map(a => ({
+        id: a.id,
+        start: a.start_at.toISOString(),
+        title: a.title,
+        contactId: a.contact_id,
+        customerName: a.customer_name,
+        employeeName: a.employee_name,
+        provider: 'google' as const,
+      }));
+
+      const activity = auditList.map(a => {
+        let channel: any = 'system';
+        if (a.type.startsWith('message')) channel = 'whatsapp';
+        else if (a.type.startsWith('payment')) channel = 'stripe';
+        else if (a.type.startsWith('appointment')) channel = 'google';
+        return {
+          id: a.id,
+          at: a.at.toISOString(),
+          channel,
+          text: a.type.replace(/\./g, ' '),
+        };
+      });
+
+      const kpis = [
+        {
+          id: 'newLeads' as const,
+          label: isManager ? 'New leads today' : 'My new leads today',
+          value: parseInt(newLeads.rows[0].total, 10),
+          unit: 'count' as const,
+          definition: 'Leads captured since midnight, from any source.',
+        },
+        {
+          id: 'avgResponse' as const,
+          label: isManager ? 'Avg. response time' : 'My response time',
+          value: Math.round(parseFloat(avgTTFR.rows[0].avg)) || null,
+          unit: 'seconds' as const,
+          definition: 'Average time from lead capture to first acknowledgement.',
+        },
+        {
+          id: 'escalations' as const,
+          label: 'Escalations today',
+          value: parseInt(escalated.rows[0].total, 10),
+          unit: 'count' as const,
+          definition: 'Leads captured today that missed at least one acknowledgement window.',
+        },
+        {
+          id: 'recoveryQueue' as const,
+          label: 'Recovery queue',
+          value: parseInt(recovery.rows[0].total, 10),
+          unit: 'count' as const,
+          definition: 'Leads that are escalating or in recovery queue.',
+          badge: parseInt(recovery.rows[0].total, 10) || undefined,
+        },
+        {
+          id: 'collected' as const,
+          label: 'Collected revenue',
+          value: hasValuesView ? parseInt(collected.rows[0].total, 10) : null,
+          masked: !hasValuesView,
+          unit: 'cents' as const,
+          definition: 'Collected revenue from completed payments.',
+        },
+      ];
+
+      const pipeline = {
+        visible: hasValuesView,
+        stages: stageValueRows.rows.map(row => ({
+          stageId: row.stage_id,
+          stageName: row.stage_name,
+          valueCents: hasValuesView ? parseInt(row.total_cents, 10) : null,
+          dealCount: parseInt(row.count, 10),
+        })),
+      };
+
+      const integrations = [
+        { key: 'twilio', name: 'Twilio WhatsApp/SMS', status: 'connected' as const },
+        { key: 'stripe', name: 'Stripe Payments', status: 'connected' as const },
+        { key: 'google', name: 'Google Calendar', status: 'connected' as const },
+        { key: 'slack', name: 'Slack Notifications', status: 'connected' as const },
+      ];
+
+      const lists = {
+        newLeads: todayLeads.map(l => ({
+          id: l.id,
+          name: l.name,
+          source: l.source,
+          status: l.state as any,
+          ownerName: l.owner_name,
+          createdAt: l.created_at.toISOString(),
+        })),
+        escalations: todayLeads.filter(l => l.state === 'escalated' || l.state === 'recovery').map(l => ({
+          id: l.id,
+          name: l.name,
+          source: l.source,
+          status: l.state as any,
+          ownerName: l.owner_name,
+          createdAt: l.created_at.toISOString(),
+        })),
+      };
+
+      const dashboardPayload = {
+        generatedAt: new Date().toISOString(),
+        scope: isManager ? ('team' as const) : ('personal' as const),
+        kpis,
+        pipeline,
+        recoveryQueue,
+        highlightedLead: recoveryQueue[0] ?? null,
+        team,
+        appointments,
+        activity,
+        integrations,
+        lists,
         tiles: {
-          newLeads: parseInt(newLeads.rows[0].total),
-          escalated: parseInt(escalated.rows[0].total),
-          recovery: parseInt(recovery.rows[0].total),
-          collected: parseInt(collected.rows[0].total),
+          newLeads: parseInt(newLeads.rows[0].total, 10),
+          escalated: parseInt(escalated.rows[0].total, 10),
+          recovery: parseInt(recovery.rows[0].total, 10),
+          collected: parseInt(collected.rows[0].total, 10),
           avgResponseTime: Math.round(parseFloat(avgTTFR.rows[0].avg)),
-          openLeads: parseInt(openLeads.rows[0].total),
+          openLeads: parseInt(openLeads.rows[0].total, 10),
           teamActivity: teamActivity.rows,
-          onLeave: parseInt(onLeave.rows[0].total),
-          upcomingAppointments: parseInt(appts.rows[0]?.total ?? '0'),
+          onLeave: parseInt(onLeave.rows[0].total, 10),
+          upcomingAppointments: parseInt(appts.rows[0]?.total ?? '0', 10),
           availability,
-          stageValues: stageValueRows.rows.map(r => ({
-            stageId: r.stage_id,
-            stageName: r.stage_name,
-            totalCents: parseInt(r.total_cents),
-            opportunityCount: parseInt(r.count),
+          stageValues: stageValueRows.rows.map(row => ({
+            stageId: row.stage_id,
+            stageName: row.stage_name,
+            totalCents: parseInt(row.total_cents, 10),
+            opportunityCount: parseInt(row.count, 10),
           })),
         },
-        scope: isManager ? 'workspace' : 'personal',
-      }, hasValuesView));
+      };
+
+      res.json(maskValues(dashboardPayload, hasValuesView));
     });
   } catch (err) { next(err); }
 });

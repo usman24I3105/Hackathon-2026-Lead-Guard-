@@ -60,6 +60,140 @@ class RealStore implements StoreLike {
   private state: State = EMPTY_STATE;
   private listeners = new Set<() => void>();
 
+  constructor() {
+    if (typeof window !== "undefined") {
+      setTimeout(() => void this.hydrate(), 50);
+    }
+  }
+
+  private notify() {
+    this.listeners.forEach((fn) => fn());
+  }
+
+  async hydrate() {
+    try {
+      const [contactsRes, leadsRes, teamRes, stagesRes, oppsRes, companiesRes, intRes, payRes] = await Promise.allSettled([
+        apiFetch<{ contacts: any[] }>("/crm/contacts"),
+        apiFetch<{ leads: any[] }>("/leads"),
+        apiFetch<{ team?: any[]; members?: any[] }>("/team"),
+        apiFetch<{ stages: any[] }>("/crm/stages"),
+        apiFetch<{ opportunities: any[] }>("/crm/opportunities"),
+        apiFetch<{ companies: any[] }>("/crm/companies"),
+        apiFetch<{ integrations: any[] }>("/integrations"),
+        apiFetch<{ payments: any[] }>("/payments"),
+      ]);
+
+      const contacts = contactsRes.status === "fulfilled" && contactsRes.value?.contacts
+        ? contactsRes.value.contacts.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            phone: c.phone_e164 || c.phone || "",
+            ownerId: c.owner_id || "",
+            optedOut: c.opted_out || false,
+            createdAt: c.created_at || new Date().toISOString(),
+          }))
+        : this.state.contacts;
+
+      const leads = leadsRes.status === "fulfilled" && leadsRes.value?.leads
+        ? leadsRes.value.leads.map((l: any) => ({
+            id: l.id,
+            contactId: l.contact_id || l.contactId,
+            name: l.name || l.contact_name || "Lead",
+            phone: l.phone_e164 || l.phone || "",
+            source: l.source || "inbound",
+            message: l.message || "",
+            status: l.state || l.status || "waiting",
+            level: l.level || 1,
+            ownerId: l.owner_id || l.ownerId || "",
+            ackDeadline: l.ack_deadline || l.ackDeadline || new Date().toISOString(),
+            createdAt: l.created_at || l.createdAt || new Date().toISOString(),
+            escalationPath: l.escalation_path || [],
+          }))
+        : this.state.leads;
+
+      const team = teamRes.status === "fulfilled" && (teamRes.value?.team || teamRes.value?.members)
+        ? (teamRes.value.team || teamRes.value.members || []).map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            email: m.email,
+            role: (m.role === "owner" ? "Owner" : m.role === "admin" ? "Admin" : "User") as any,
+            availability: (m.status === "on_leave" ? "on_leave" : m.status === "busy" ? "busy" : "available") as any,
+            capacity: 5,
+            openLeads: m.open_leads || 0,
+            avatarColor: "#3b82f6",
+            canTakeLeads: m.status === "available",
+            inRotation: true,
+          }))
+        : this.state.team;
+
+      const stages = stagesRes.status === "fulfilled" && stagesRes.value?.stages
+        ? stagesRes.value.stages
+        : this.state.stages;
+
+      const opportunities = oppsRes.status === "fulfilled" && oppsRes.value?.opportunities
+        ? oppsRes.value.opportunities.map((o: any) => ({
+            id: o.id,
+            title: o.title || o.name || "Opportunity",
+            contactId: o.contact_id || o.contactId,
+            stageId: o.stage_id || o.stageId,
+            valueCents: o.value_cents ?? o.valueCents ?? 0,
+            fields: o.custom || {},
+            createdAt: o.created_at || new Date().toISOString(),
+          }))
+        : this.state.opportunities;
+
+      const companies = companiesRes.status === "fulfilled" && companiesRes.value?.companies
+        ? companiesRes.value.companies.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            contactIds: c.contact_ids || [],
+            createdAt: c.created_at || new Date().toISOString(),
+          }))
+        : this.state.companies;
+
+      const integrations = intRes.status === "fulfilled" && intRes.value?.integrations
+        ? intRes.value.integrations.map((i: any) => ({
+            key: i.provider,
+            name: i.provider.charAt(0).toUpperCase() + i.provider.slice(1),
+            status: (i.status === "configured" ? "connected" : "not_configured") as any,
+            capability: "Integration provider",
+            limits: "Test / Sandbox mode",
+            maskedSecret: i.maskedSecret,
+            lastSuccess: i.last_ok_at,
+            lastError: i.last_error,
+          }))
+        : this.state.integrations;
+
+      const payments = payRes.status === "fulfilled" && payRes.value?.payments
+        ? payRes.value.payments.map((p: any) => ({
+            id: p.id,
+            contactId: p.contactId || p.contact_id || "",
+            amountCents: p.amountCents || p.amount_cents || 0,
+            status: p.status || "pending",
+            memo: p.memo || "Payment",
+            createdAt: p.createdAt || p.created_at || new Date().toISOString(),
+            url: p.url || "",
+          }))
+        : this.state.payments;
+
+      this.state = {
+        ...this.state,
+        contacts,
+        leads,
+        team,
+        stages,
+        opportunities,
+        companies,
+        integrations,
+        payments,
+      };
+
+      this.notify();
+    } catch {
+      // hydration non-fatal
+    }
+  }
+
   async login(email: string, password: string): Promise<AuthResult> {
     try {
       const res = await apiFetch<{
@@ -80,6 +214,7 @@ class RealStore implements StoreLike {
 
       if (userId) {
         const role = roleRaw === "owner" ? "Owner" : roleRaw === "admin" ? "Admin" : "User";
+        void this.hydrate();
         return {
           ok: true,
           session: {
@@ -175,8 +310,7 @@ class RealStore implements StoreLike {
   }
 
   createContact(input: { name: string; phone: string; ownerId: string }): Contact {
-    fireAndForget(apiFetch("/crm/contacts", { method: "POST", body: JSON.stringify(input) }));
-    return {
+    const contact: Contact = {
       id: `c_${Date.now()}`,
       name: input.name,
       phone: input.phone,
@@ -184,6 +318,17 @@ class RealStore implements StoreLike {
       optedOut: false,
       createdAt: new Date().toISOString(),
     };
+    this.state = { ...this.state, contacts: [contact, ...this.state.contacts] };
+    this.notify();
+    fireAndForget(
+      apiFetch<{ id?: string }>("/crm/contacts", { method: "POST", body: JSON.stringify(input) }).then((res) => {
+        if (res?.id) {
+          contact.id = res.id;
+          this.notify();
+        }
+      })
+    );
+    return contact;
   }
 
   createOpportunity(input: { title: string; contactId: string; stageId: string; valueCents: number | null }): Opportunity {
@@ -229,16 +374,29 @@ class RealStore implements StoreLike {
   }
 
   createPaymentLink(contactId: string, amountCents: number, memo: string): Payment {
-    fireAndForget(apiFetch("/payments/create-session", { method: "POST", body: JSON.stringify({ opportunityId: contactId }) }));
-    return {
+    const payment: Payment = {
       id: `pay_${Date.now()}`,
       contactId,
       amountCents,
       status: "pending",
       memo,
       createdAt: new Date().toISOString(),
-      url: "https://checkout.stripe.com/demo",
+      url: "",
     };
+    this.state = { ...this.state, payments: [payment, ...this.state.payments] };
+    this.notify();
+
+    apiFetch<{ checkoutUrl?: string; url?: string; sessionId?: string }>("/payments/create-session", {
+      method: "POST",
+      body: JSON.stringify({ contactId, amountCents, title: memo }),
+    }).then((res) => {
+      if (res?.checkoutUrl || res?.url) {
+        payment.url = res.checkoutUrl || res.url || "";
+        this.notify();
+      }
+    }).catch(reportError);
+
+    return payment;
   }
 
   toggleOptOut(contactId: string, optedOut: boolean) {
