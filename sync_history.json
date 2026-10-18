@@ -1,5 +1,29 @@
 [
   {
+    "id": "sync_1792316005164_7ea45",
+    "timestamp": "2026-10-18T09:33:25.164Z",
+    "direction": "outbound",
+    "provider": "stripe",
+    "eventType": "checkout_session_created",
+    "status": "ok",
+    "referenceId": "cs_test_a1AahgWYzeEz9gAn9o90GMuE5KyzmgSr2DRAhnnQJA008alo6HF6lcsyEL",
+    "details": {
+      "amountCents": 50000
+    }
+  },
+  {
+    "id": "sync_1792315942634_yr0e0",
+    "timestamp": "2026-10-18T09:32:22.634Z",
+    "direction": "outbound",
+    "provider": "slack",
+    "eventType": "alert",
+    "status": "ok",
+    "referenceId": "lead_dbefb99d-c35",
+    "details": {
+      "summary": "🚨 Demo Alert — Lead Escalation"
+    }
+  },
+  {
     "id": "sync_1792315733233_imwv9",
     "timestamp": "2026-10-18T09:28:53.233Z",
     "direction": "outbound",
