@@ -27,7 +27,10 @@ REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO lg_migrator, lg_app, lg_worker;
 
 -- lg_migrator owns the schema — full DDL rights
-GRANT ALL PRIVILEGES ON DATABASE leadguard TO lg_migrator;
+-- Database name comes from the connection, not a literal (it differs per install).
+DO $$ BEGIN
+  EXECUTE format('GRANT ALL PRIVILEGES ON DATABASE %I TO lg_migrator', current_database());
+END $$;
 GRANT ALL ON SCHEMA public TO lg_migrator;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO lg_migrator;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO lg_migrator;

@@ -37,3 +37,12 @@ export async function withTenant<T>(
 export function byWorkspace(workspaceId: string): { workspaceId: string } {
   return { workspaceId };
 }
+
+/** One-off query inside a tenant-scoped transaction (RLS-visible). */
+export async function tenantQuery<T extends import('pg').QueryResultRow = any>(
+  workspaceId: string,
+  sql: string,
+  params: unknown[] = [],
+): Promise<import('pg').QueryResult<T>> {
+  return withTenant(workspaceId, (client) => client.query<T>(sql, params));
+}

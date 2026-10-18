@@ -1,12 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { withTenant } from '../../db/tenant';
+import { withTenant, tenantQuery } from '../../db/tenant';
 import { AppError } from '../errors';
 import { requireAuth, requirePermission, type AuthRequest } from '../auth';
 import { writeAudit } from '../../domain/audit';
 import { maskValues } from '../../security/masking';
-import { appPool } from '../../db/pool';
 
 export const crmRoutes = Router();
 crmRoutes.use(requireAuth);
@@ -416,7 +415,7 @@ crmRoutes.post('/filters', async (req, res, next) => {
 });
 
 async function checkPermission(userId: string, workspaceId: string, flag: string): Promise<boolean> {
-  const { rows } = await appPool.query<{ role: string; permissions: string[] }>(
+  const { rows } = await tenantQuery<{ role: string; permissions: string[] }>(workspaceId, 
     `SELECT role, permissions FROM "user" WHERE id = $1 AND workspace_id = $2`,
     [userId, workspaceId],
   );

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { withTenant } from '../../db/tenant';
-import { appPool } from '../../db/pool';
+import { workerPool } from '../../db/pool';
 import { AppError } from '../errors';
 import { requireAuth, requirePermission, type AuthRequest } from '../auth';
 import { writeSecurityEvent } from '../../security/security-events';
@@ -108,7 +108,7 @@ teamRoutes.post('/accept-invite', async (req, res, next) => {
     const tokenHash = hashToken(token);
     const now = new Date();
 
-    const { rows } = await appPool.query<{
+    const { rows } = await workerPool.query<{
       id: string;
       workspace_id: string;
       email: string;

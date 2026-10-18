@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { appPool, workerPool } from '../../db/pool';
-import { withTenant } from '../../db/tenant';
+import { withTenant, tenantQuery } from '../../db/tenant';
 import { AppError } from '../errors';
 import { requireAuth, type AuthRequest } from '../auth';
 import {
@@ -206,7 +206,7 @@ authRoutes.post('/reauth', requireAuth, async (req, res, next) => {
   const r = req as AuthRequest;
   try {
     const { password } = reauthSchema.strict().parse(req.body);
-    const { rows } = await appPool.query<{ password_hash: string }>(
+    const { rows } = await tenantQuery<{ password_hash: string }>(r.workspaceId, 
       `SELECT password_hash FROM "user" WHERE id = $1`,
       [r.userId],
     );

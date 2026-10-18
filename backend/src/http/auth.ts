@@ -1,7 +1,7 @@
+import { tenantQuery } from '../db/tenant';
 import type { Request, Response, NextFunction } from 'express';
 import { AppError } from './errors';
 import { writeSecurityEvent } from '../security/security-events';
-import { appPool } from '../db/pool';
 import { config } from '../config';
 
 export type AuthRequest<P = any, ResBody = any, ReqBody = any, ReqQuery = any> = Request<P, ResBody, ReqBody, ReqQuery> & {
@@ -36,7 +36,7 @@ export function requirePermission(flag: string) {
     }
 
     try {
-      const { rows } = await appPool.query<{ role: string; permissions: string[] }>(
+      const { rows } = await tenantQuery<{ role: string; permissions: string[] }>(r.workspaceId, 
         `SELECT role, permissions FROM "user" WHERE id = $1 AND workspace_id = $2`,
         [r.userId, r.workspaceId],
       );

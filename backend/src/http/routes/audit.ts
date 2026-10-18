@@ -2,9 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, type AuthRequest } from '../auth';
 import { AppError } from '../errors';
-import { withTenant } from '../../db/tenant';
+import { withTenant, tenantQuery } from '../../db/tenant';
 import { maskAuditDiff } from '../../security/masking';
-import { appPool } from '../../db/pool';
 
 export const auditRoutes = Router();
 auditRoutes.use(requireAuth);
@@ -61,7 +60,7 @@ auditRoutes.get('/', async (req, res, next) => {
 auditRoutes.get('/verify', async (req, res, next) => {
   const r = req as AuthRequest;
   try {
-    const { rows } = await appPool.query(
+    const { rows } = await tenantQuery(r.workspaceId,
       `SELECT id, seq, prev_hash, hash FROM audit_log
        WHERE workspace_id = $1 AND hash IS NOT NULL ORDER BY seq`,
       [r.workspaceId],
@@ -72,7 +71,7 @@ auditRoutes.get('/verify', async (req, res, next) => {
 });
 
 async function checkPermission(userId: string, workspaceId: string, flag: string): Promise<boolean> {
-  const { rows } = await appPool.query<{ role: string; permissions: string[] }>(
+  const { rows } = await tenantQuery<{ role: string; permissions: string[] }>(workspaceId, 
     `SELECT role, permissions FROM "user" WHERE id = $1 AND workspace_id = $2`,
     [userId, workspaceId],
   );
