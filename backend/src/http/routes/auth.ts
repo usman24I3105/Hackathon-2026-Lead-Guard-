@@ -115,7 +115,7 @@ authRoutes.post('/login', loginRateLimit, async (req, res, next) => {
     checkLockout(email, ip);
 
     // SECURITY DEFINER lookup — pre-tenant (session/user by email before workspace is known)
-    const { rows } = await appPool.query<{
+    const { rows } = await workerPool.query<{
       id: string;
       workspace_id: string;
       password_hash: string;
@@ -144,7 +144,7 @@ authRoutes.post('/login', loginRateLimit, async (req, res, next) => {
     // Rehash if parameters changed
     if (await needsRehash(user.password_hash)) {
       const newHash = await hashPassword(password);
-      await appPool.query(`UPDATE "user" SET password_hash = $1 WHERE id = $2`, [newHash, user.id]);
+      await workerPool.query(`UPDATE "user" SET password_hash = $1 WHERE id = $2`, [newHash, user.id]);
     }
 
     // Rotate session on login
