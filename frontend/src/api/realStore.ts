@@ -72,7 +72,7 @@ class RealStore implements StoreLike {
 
   async hydrate() {
     try {
-      const [contactsRes, leadsRes, teamRes, stagesRes, oppsRes, companiesRes, intRes, payRes] = await Promise.allSettled([
+      const [contactsRes, leadsRes, teamRes, stagesRes, oppsRes, companiesRes, intRes, payRes, apptsRes] = await Promise.allSettled([
         apiFetch<{ contacts: any[] }>("/crm/contacts"),
         apiFetch<{ leads: any[] }>("/leads"),
         apiFetch<{ team?: any[]; members?: any[] }>("/team"),
@@ -81,6 +81,7 @@ class RealStore implements StoreLike {
         apiFetch<{ companies: any[] }>("/crm/companies"),
         apiFetch<{ integrations: any[] }>("/integrations"),
         apiFetch<{ payments: any[] }>("/payments"),
+        apiFetch<{ appointments: any[] }>("/calendar/events"),
       ]);
 
       const contacts = contactsRes.status === "fulfilled" && contactsRes.value?.contacts
@@ -176,6 +177,17 @@ class RealStore implements StoreLike {
           }))
         : this.state.payments;
 
+      const appointments = apptsRes.status === "fulfilled" && apptsRes.value?.appointments
+        ? apptsRes.value.appointments.map((a: any) => ({
+            id: a.id,
+            contactId: a.contact_id || a.contactId,
+            start: a.start_at || a.start,
+            end: a.end_at || a.end,
+            status: "booked" as const,
+            title: a.title,
+          }))
+        : this.state.appointments;
+
       this.state = {
         ...this.state,
         contacts,
@@ -186,6 +198,7 @@ class RealStore implements StoreLike {
         companies,
         integrations,
         payments,
+        appointments,
       };
 
       this.notify();
@@ -404,8 +417,7 @@ class RealStore implements StoreLike {
   }
 
   bookAppointment(contactId: string, title: string, start: string, end: string): Appointment {
-    fireAndForget(apiFetch("/calendar/events", { method: "POST", body: JSON.stringify({ leadId: contactId, title, startAt: start, endAt: end }) }));
-    return {
+    const appt: Appointment = {
       id: `appt_${Date.now()}`,
       contactId,
       title,
@@ -413,9 +425,29 @@ class RealStore implements StoreLike {
       end,
       status: "booked",
     };
+    this.state = { ...this.state, appointments: [appt, ...this.state.appointments] };
+    this.notify();
+
+    fireAndForget(
+      apiFetch<{ appointmentId?: string }>("/calendar/events", {
+        method: "POST",
+        body: JSON.stringify({ leadId: contactId, title, startAt: start, endAt: end }),
+      }).then((res) => {
+        if (res?.appointmentId) {
+          appt.id = res.appointmentId;
+          this.notify();
+        }
+      })
+    );
+    return appt;
   }
 
   cancelAppointment(id: string) {
+    this.state = {
+      ...this.state,
+      appointments: this.state.appointments.map((a) => (a.id === id ? { ...a, status: "cancelled" as const } : a)),
+    };
+    this.notify();
     fireAndForget(apiFetch(`/calendar/events/${id}`, { method: "DELETE" }));
   }
 
