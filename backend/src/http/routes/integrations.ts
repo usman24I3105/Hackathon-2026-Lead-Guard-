@@ -75,6 +75,25 @@ integrationsRoutes.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── POST /slack/test: Send demo/test Slack alert ─────────────────────────────
+integrationsRoutes.post('/slack/test', async (req, res, next) => {
+  const r = req as AuthRequest;
+  try {
+    const { sendSlackAlert } = await import('../../integrations/slack');
+    const ok = await sendSlackAlert({
+      title: '🚨 Demo Alert — Lead Escalation',
+      leadName: 'Alice Smith',
+      leadPhone: '+1 (555) 123-4567',
+      source: 'WHATSAPP',
+      reason: 'Urgent buying intent: Requested pricing quote and callback ASAP',
+      amount: '450.00',
+      leadId: 'lead_dbefb99d-c35',
+      workspaceId: r.workspaceId,
+    });
+    res.json({ ok, success: ok, message: 'Test alert dispatched to Slack channel' });
+  } catch (err) { next(err); }
+});
+
 // ── GET /sync/history: Sync history endpoint ──────────────────────────────────
 integrationsRoutes.get('/sync/history', async (req, res, next) => {
   try {

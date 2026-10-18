@@ -21,6 +21,16 @@ export function IntegrationCard({ integration, canManage }: { integration: Integ
     push(`${integration.name} connected.`);
   }
 
+  async function testSlackAlert() {
+    try {
+      const { apiFetch } = await import("../../api/client");
+      await apiFetch("/integrations/slack/test", { method: "POST" });
+      push("Test alert sent to Slack #lead-alerts! Check your Slack channel.", "success");
+    } catch {
+      push("Failed to trigger Slack test alert.", "error");
+    }
+  }
+
   return (
     <Card className="p-4 flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -56,9 +66,16 @@ export function IntegrationCard({ integration, canManage }: { integration: Integ
       {canManage ? (
         <div className="mt-2 flex flex-col gap-2">
           {integration.status === "connected" ? (
-            <Button variant="secondary" onClick={() => store.disconnectIntegration(integration.key)} className="self-start">
-              Disconnect
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {integration.key === "slack" && (
+                <Button variant="primary" onClick={testSlackAlert} className="self-start">
+                  Send test alert
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => store.disconnectIntegration(integration.key)} className="self-start">
+                Disconnect
+              </Button>
+            </div>
           ) : connecting ? (
             <SecretInput label={`${integration.name} API key`} savingLabel="Connecting…" onSave={saveCredential} />
           ) : (

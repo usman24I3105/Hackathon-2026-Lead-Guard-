@@ -1,5 +1,47 @@
 [
   {
+    "id": "sync_1792315733233_imwv9",
+    "timestamp": "2026-10-18T09:28:53.233Z",
+    "direction": "outbound",
+    "provider": "slack",
+    "eventType": "alert",
+    "status": "ok",
+    "referenceId": "lead_d9c4bb09-eb4",
+    "details": {
+      "summary": "🚨 Hot Lead Escalated (SMS)"
+    }
+  },
+  {
+    "id": "sync_1792315732334_n18r2",
+    "timestamp": "2026-10-18T09:28:52.334Z",
+    "direction": "inbound",
+    "provider": "twilio",
+    "eventType": "sms",
+    "status": "ok",
+    "referenceId": "SMn5ztqvnh4r2kofmwgperk",
+    "details": {
+      "from": "+15559876543",
+      "profileName": "Robert Vance",
+      "body": "Hello! I need an urgent quote and pricing for your services ASAP!",
+      "urgent": true
+    }
+  },
+  {
+    "id": "sync_1792315374308_sxlpa",
+    "timestamp": "2026-10-18T09:22:54.308Z",
+    "direction": "outbound",
+    "provider": "google",
+    "eventType": "appointment.created",
+    "status": "ok",
+    "referenceId": "gcal_f8774217-3",
+    "details": {
+      "title": "Inspection",
+      "startAt": "2026-10-18T12:22:00.000Z",
+      "endAt": "2026-10-18T13:22:00.000Z",
+      "appointmentId": "appt_f2fbc9b6-e23"
+    }
+  },
+  {
     "id": "sync_1792314947383_ehnht",
     "timestamp": "2026-10-18T09:15:47.383Z",
     "direction": "outbound",
