@@ -5,41 +5,60 @@ import { AppError } from '../errors';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import Stripe from 'stripe';
+import { recordSyncEvent } from '../../integrations/sync-history';
 
 export const paymentRoutes = Router();
 paymentRoutes.use(requireAuth);
 
-// ── Create Stripe Checkout session ────────────────────────────────────────────
+// ── Create Stripe Checkout session (Schema 1: internal) ──────────────────────
 const checkoutSchema = z.object({
-  opportunityId: z.string(),
+  opportunityId: z.string().optional(),
+  contactId: z.string().optional(),
   amountCents: z.number().int().min(1),
   currency: z.string().default('usd'),
   description: z.string().optional(),
+  title: z.string().optional(),
+  customerEmail: z.string().email().optional(),
 });
 
-paymentRoutes.post('/checkout', async (req, res, next) => {
+async function handleCreateSession(req: any, res: any, next: any) {
   const r = req as AuthRequest;
   try {
-    const body = checkoutSchema.strict().parse(req.body);
+    const body = checkoutSchema.parse(req.body);
     const { config } = await import('../../config');
     if (!config.STRIPE_SECRET_KEY) throw new AppError(503, 'not_configured', 'Stripe not configured');
 
     const stripe = new Stripe(config.STRIPE_SECRET_KEY);
 
     await withTenant(r.workspaceId, async (client) => {
-      // Verify opportunity exists in workspace
-      const { rows } = await client.query(
-        `SELECT id FROM opportunity WHERE id = $1 AND workspace_id = $2`,
-        [body.opportunityId, r.workspaceId],
-      );
-      if (!rows[0]) throw new AppError(404, 'not_found', 'Opportunity not found');
+      let oppId = body.opportunityId;
+      if (oppId) {
+        // Verify opportunity exists in workspace
+        const { rows } = await client.query(
+          `SELECT id FROM opportunity WHERE id = $1 AND workspace_id = $2`,
+          [oppId, r.workspaceId],
+        );
+        if (!rows[0]) throw new AppError(404, 'not_found', 'Opportunity not found');
+      } else {
+        // Find or create default opportunity for workspace
+        const { rows } = await client.query<{ id: string }>(
+          `SELECT id FROM opportunity WHERE workspace_id = $1 LIMIT 1`,
+          [r.workspaceId],
+        );
+        oppId = rows[0]?.id;
+      }
 
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
+        customer_email: body.customerEmail,
+        metadata: {
+          opportunityId: oppId || '',
+          contactId: body.contactId || '',
+        },
         line_items: [{
           price_data: {
             currency: body.currency,
-            product_data: { name: body.description ?? 'LeadGuard Payment' },
+            product_data: { name: body.title || body.description || 'LeadGuard Payment' },
             unit_amount: body.amountCents,
           },
           quantity: 1,
@@ -50,16 +69,36 @@ paymentRoutes.post('/checkout', async (req, res, next) => {
       });
 
       const paymentId = `pay_${randomUUID().slice(0, 12)}`;
-      await client.query(
-        `INSERT INTO payment (id, workspace_id, opportunity_id, stripe_session_id, status, amount_cents)
-         VALUES ($1, $2, $3, $4, 'pending', $5)`,
-        [paymentId, r.workspaceId, body.opportunityId, session.id, body.amountCents],
-      );
+      if (oppId) {
+        await client.query(
+          `INSERT INTO payment (id, workspace_id, opportunity_id, stripe_session_id, status, amount_cents)
+           VALUES ($1, $2, $3, $4, 'pending', $5)`,
+          [paymentId, r.workspaceId, oppId, session.id, body.amountCents],
+        );
+      }
 
-      res.json({ url: session.url, sessionId: session.id, paymentId });
+      await recordSyncEvent({
+        direction: 'outbound',
+        provider: 'stripe',
+        eventType: 'checkout_session_created',
+        status: 'ok',
+        referenceId: session.id,
+        details: { amountCents: body.amountCents, opportunityId: oppId },
+      });
+
+      res.json({
+        success: true,
+        url: session.url,
+        checkoutUrl: session.url,
+        sessionId: session.id,
+        paymentId,
+      });
     });
   } catch (err) { next(err); }
-});
+}
+
+paymentRoutes.post('/checkout', handleCreateSession);
+paymentRoutes.post('/create-checkout-session', handleCreateSession);
 
 // ── List payments for opportunity ─────────────────────────────────────────────
 paymentRoutes.get('/opportunity/:id', async (req, res, next) => {

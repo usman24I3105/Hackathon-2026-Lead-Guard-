@@ -61,10 +61,15 @@ export function buildApp(): express.Application {
 
   // ── 4. Raw body for webhooks (must come before json parser) ──────────────────
   app.use('/webhooks', express.raw({ type: '*/*', limit: '128kb' }));
+  app.use('/webhook', express.raw({ type: '*/*', limit: '128kb' }));
+  app.use('/api/stripe/webhook', express.raw({ type: '*/*', limit: '128kb' }));
 
   // ── 5. JSON body parser ──────────────────────────────────────────────────────
   app.use(
     express.json({ limit: `${config.BODY_LIMIT_KB}kb` }),
+  );
+  app.use(
+    express.urlencoded({ extended: true, limit: `${config.BODY_LIMIT_KB}kb` }),
   );
 
   // ── 6. Cookie parser ─────────────────────────────────────────────────────────
@@ -93,9 +98,9 @@ export function buildApp(): express.Application {
   app.use(userRateLimit);
 
   // ── 10. Origin + CSRF check (authenticated mutating routes only) ──────────────
-  // Webhook routes are exempt (handled in their own middleware)
-  app.use(/^(?!\/webhooks)/, originCheck);
-  app.use(/^(?!\/webhooks)/, csrfCheck);
+  // Webhook routes and OAuth callbacks are exempt
+  app.use(/^(?!\/(webhooks|webhook|api\/stripe\/webhook|auth\/google))/, originCheck);
+  app.use(/^(?!\/(webhooks|webhook|api\/stripe\/webhook|auth\/google))/, csrfCheck);
 
   // ── Health check (no auth required) ──────────────────────────────────────────
   app.get('/api/health', (_req, res) => {
@@ -105,6 +110,18 @@ export function buildApp(): express.Application {
   // ── Webhooks (signature-gated, no session/CSRF) ───────────────────────────────
   app.use('/webhooks/twilio', twilioWebhook);
   app.use('/webhooks/stripe', stripeWebhook);
+  app.use('/webhook', twilioWebhook);
+  app.use('/api/stripe/webhook', stripeWebhook);
+
+  // ── OAuth redirect routes ────────────────────────────────────────────────────
+  app.get('/auth/google', (req, res, next) => {
+    req.url = '/google/connect';
+    integrationsRoutes(req, res, next);
+  });
+  app.get('/auth/google/callback', (req, res, next) => {
+    req.url = '/google/callback';
+    integrationsRoutes(req, res, next);
+  });
 
   // ── API routes ────────────────────────────────────────────────────────────────
   app.use('/api/auth', authRoutes);
@@ -115,10 +132,20 @@ export function buildApp(): express.Application {
   app.use('/api/audit', auditRoutes);
   app.use('/api/integrations', integrationsRoutes);
   app.use('/api/messaging', messagingRoutes);
+  app.use('/api/messages', messagingRoutes);
   app.use('/api/payments', paymentRoutes);
+  app.use('/api/stripe', paymentRoutes);
   app.use('/api/calendar', calendarRoutes);
   app.use('/api/public', publicRoutes);
   app.use('/api/stream', streamRoutes);
+
+  // ── Direct sync history route ─────────────────────────────────────────────────
+  app.get('/api/sync/history', async (req, res) => {
+    const { getSyncHistory } = await import('../integrations/sync-history');
+    const limit = Number(req.query.limit) || 100;
+    res.json({ success: true, history: getSyncHistory(limit) });
+  });
+
   app.get('/api/me', (req, res, next) => {
     req.url = '/me';
     authRoutes(req, res, next);

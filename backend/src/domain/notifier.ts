@@ -62,7 +62,30 @@ async function processNotification(
     const leadUrl = `${PUBLIC_BASE_URL}/leads/${input.leadId}`;
     // SEC-5: escape HTML special chars; cap length
     const safeReason = escapeHtml(input.reason.slice(0, 200));
-    const text = `🚨 Lead escalated\\n\\nReason: ${safeReason}\\nView: ${leadUrl}`;
+    const text = `🚨 Lead escalated\n\nReason: ${safeReason}\nView: ${leadUrl}`;
+
+    // I4: Dispatch Slack notification
+    try {
+      const { rows: leadInfo } = await workerPool.query<{ lead_name: string | null; phone_e164: string | null; source: string | null }>(
+        `SELECT c.name AS lead_name, c.phone_e164, l.source
+         FROM lead l
+         JOIN contact c ON c.id = l.contact_id
+         WHERE l.id = $1`,
+        [input.leadId],
+      );
+      const { sendSlackAlert } = await import('../integrations/slack');
+      await sendSlackAlert({
+        title: '🚨 Lead Escalation Alert',
+        leadId: input.leadId,
+        leadName: leadInfo[0]?.lead_name || 'Customer',
+        leadPhone: leadInfo[0]?.phone_e164 || undefined,
+        source: leadInfo[0]?.source || 'System',
+        reason: input.reason,
+        workspaceId: input.workspaceId,
+      });
+    } catch (slackErr) {
+      logger.warn({ err: slackErr }, 'Slack escalation alert failed');
+    }
 
     await workerPool.query(
       `UPDATE notification SET attempts = attempts + 1, last_attempted_at = NOW()

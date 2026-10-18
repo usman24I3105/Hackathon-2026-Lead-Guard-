@@ -12,23 +12,75 @@ import { hub } from '../../realtime/hub';
 export const integrationsRoutes = Router();
 integrationsRoutes.use(requireAuth);
 
-const PROVIDERS = ['twilio', 'stripe', 'telegram', 'google'] as const;
+const PROVIDERS = ['twilio', 'stripe', 'telegram', 'google', 'slack'] as const;
 type Provider = (typeof PROVIDERS)[number];
 
 // ── List integrations ─────────────────────────────────────────────────────────
 integrationsRoutes.get('/', async (req, res, next) => {
   const r = req as AuthRequest;
   try {
+    const { config } = await import('../../config');
     await withTenant(r.workspaceId, async (client) => {
-      const { rows } = await client.query(
+      const { rows } = await client.query<{
+        provider: string;
+        last_ok_at: Date | null;
+        last_error: string | null;
+        updated_at: Date;
+        status: string;
+      }>(
         `SELECT provider, last_ok_at, last_error, updated_at,
                 CASE WHEN encrypted_config IS NOT NULL THEN 'configured' ELSE 'not_configured' END AS status
          FROM integration_config WHERE workspace_id = $1`,
         [r.workspaceId],
       );
-      // Mask secrets — only show last 4 chars of key-like values
-      res.json({ integrations: rows });
+
+      const map = new Map<string, any>(rows.map(row => [row.provider, row]));
+
+      // Merge environment configurations
+      const result = PROVIDERS.map((p) => {
+        const existing = map.get(p);
+        let envConfigured = false;
+        let maskedSecret: string | undefined;
+
+        if (p === 'twilio' && config.TWILIO_ACCOUNT_SID) {
+          envConfigured = true;
+          maskedSecret = `...${config.TWILIO_ACCOUNT_SID.slice(-4)}`;
+        } else if (p === 'stripe' && config.STRIPE_SECRET_KEY) {
+          envConfigured = true;
+          maskedSecret = `...${config.STRIPE_SECRET_KEY.slice(-4)}`;
+        } else if (p === 'slack' && config.SLACK_WEBHOOK_URL) {
+          envConfigured = true;
+          maskedSecret = `...${config.SLACK_WEBHOOK_URL.slice(-4)}`;
+        } else if (p === 'google' && config.GOOGLE_CLIENT_ID) {
+          envConfigured = true;
+          maskedSecret = `...${config.GOOGLE_CLIENT_ID.slice(-4)}`;
+        } else if (p === 'telegram' && config.TELEGRAM_BOT_TOKEN) {
+          envConfigured = true;
+          maskedSecret = `...${config.TELEGRAM_BOT_TOKEN.slice(-4)}`;
+        }
+
+        const isConfigured = existing?.status === 'configured' || envConfigured;
+        return {
+          provider: p,
+          status: isConfigured ? 'configured' : 'not_configured',
+          last_ok_at: existing?.last_ok_at ?? (envConfigured ? new Date() : null),
+          last_error: existing?.last_error ?? null,
+          updated_at: existing?.updated_at ?? new Date(),
+          maskedSecret,
+        };
+      });
+
+      res.json({ integrations: result });
     });
+  } catch (err) { next(err); }
+});
+
+// ── GET /sync/history: Sync history endpoint ──────────────────────────────────
+integrationsRoutes.get('/sync/history', async (req, res, next) => {
+  try {
+    const { getSyncHistory } = await import('../../integrations/sync-history');
+    const limit = Number(req.query.limit) || 100;
+    res.json({ success: true, history: getSyncHistory(limit) });
   } catch (err) { next(err); }
 });
 

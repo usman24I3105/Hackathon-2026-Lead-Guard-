@@ -12,14 +12,6 @@ import { implicitAck } from '../../domain/acknowledge';
 export const calendarRoutes = Router();
 calendarRoutes.use(requireAuth);
 
-const createEventSchema = z.object({
-  leadId: z.string(),
-  title: z.string().max(200),
-  startAt: z.string().datetime(),
-  endAt: z.string().datetime(),
-  attendeeEmail: z.string().email().optional(),
-});
-
 const updateEventSchema = z.object({
   title: z.string().max(200).optional(),
   startAt: z.string().datetime().optional(),
@@ -254,13 +246,45 @@ calendarRoutes.get('/events', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── POST /events: Create Google Calendar event + local appointment ─────────────
-calendarRoutes.post('/events', async (req, res, next) => {
+const bookEventSchema = z.object({
+  leadId: z.string().optional(),
+  title: z.string().max(200).optional(),
+  summary: z.string().max(200).optional(),
+  customerName: z.string().optional(),
+  customerEmail: z.string().email().optional(),
+  attendeeEmail: z.string().email().optional(),
+  startAt: z.string().optional(),
+  endAt: z.string().optional(),
+  startDateTime: z.string().optional(),
+  endDateTime: z.string().optional(),
+  checkConflict: z.boolean().default(true),
+});
+
+async function handleCreateOrBookEvent(req: any, res: any, next: any) {
   const r = req as AuthRequest;
   try {
-    const body = createEventSchema.strict().parse(req.body);
+    const raw = bookEventSchema.parse(req.body);
+    const title = raw.title || raw.summary || (raw.customerName ? `Appointment: ${raw.customerName}` : 'Appointment');
+    const startAt = raw.startAt || raw.startDateTime;
+    const endAt = raw.endAt || raw.endDateTime;
+    const attendeeEmail = raw.attendeeEmail || raw.customerEmail;
+    const checkConflict = raw.checkConflict ?? true;
+
+    if (!startAt || !endAt) {
+      throw new AppError(400, 'validation_error', 'startAt (or startDateTime) and endAt (or endDateTime) are required');
+    }
 
     await withTenant(r.workspaceId, async (client) => {
+      // Find lead or resolve default
+      let leadId = raw.leadId;
+      if (!leadId) {
+        const { rows: lRows } = await client.query<{ id: string }>(
+          `SELECT id FROM lead WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 1`,
+          [r.workspaceId],
+        );
+        leadId = lRows[0]?.id;
+      }
+
       // Check connection
       const { rows: connRows } = await client.query<{
         id: string;
@@ -273,18 +297,57 @@ calendarRoutes.post('/events', async (req, res, next) => {
         [r.userId, r.workspaceId],
       );
 
-      if (!connRows[0]) throw new AppError(409, 'calendar_not_connected', 'Google Calendar is not connected');
+      if (!connRows[0]) throw new AppError(409, 'calendar_not_connected', 'Google Calendar is not connected. Visit /auth/google first.');
       if (connRows[0].status === 'needs_reconnect') throw new AppError(409, 'needs_reconnect', 'Google Calendar needs reconnection');
 
       const accessToken = await getValidGoogleToken(client, r.workspaceId, r.userId);
       if (!accessToken) throw new AppError(409, 'needs_reconnect', 'Google Calendar token expired or invalid — please reconnect');
 
+      // I3.4: Conflict avoidance via FreeBusy & local appointments
+      if (checkConflict) {
+        const { rows: conflicts } = await client.query<{ id: string; title: string; start_at: Date; end_at: Date }>(
+          `SELECT id, title, start_at, end_at FROM appointment
+           WHERE workspace_id = $1 AND user_id = $2
+             AND start_at < $4 AND end_at > $3`,
+          [r.workspaceId, r.userId, startAt, endAt],
+        );
+        const busyList = conflicts.map(c => ({ start: c.start_at.toISOString(), end: c.end_at.toISOString(), title: c.title }));
+
+        try {
+          const gcalRes = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              timeMin: startAt,
+              timeMax: endAt,
+              items: [{ id: 'primary' }],
+            }),
+          });
+          if (gcalRes.ok) {
+            const fbData = await gcalRes.json() as any;
+            const gBusy = fbData.calendars?.primary?.busy || [];
+            for (const b of gBusy) {
+              busyList.push({ start: b.start, end: b.end, title: 'Busy' });
+            }
+          }
+        } catch {
+          // ignore FreeBusy error if offline
+        }
+
+        if (busyList.length > 0) {
+          return res.status(409).json({
+            error: 'Scheduling conflict: The employee is already busy.',
+            busy: busyList,
+          });
+        }
+      }
+
       // Create Google Calendar event
       const eventPayload = {
-        summary: body.title,
-        start: { dateTime: body.startAt },
-        end: { dateTime: body.endAt },
-        ...(body.attendeeEmail && { attendees: [{ email: body.attendeeEmail }] }),
+        summary: title,
+        start: { dateTime: startAt },
+        end: { dateTime: endAt },
+        ...(attendeeEmail && { attendees: [{ email: attendeeEmail }] }),
       };
 
       const gcalRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
@@ -298,16 +361,19 @@ calendarRoutes.post('/events', async (req, res, next) => {
         throw new AppError(502, 'calendar_error', err.error?.message ?? 'Google Calendar API error');
       }
 
-      const gcalEvent = await gcalRes.json() as { id: string };
+      const gcalEvent = await gcalRes.json() as { id: string; htmlLink?: string };
 
       const appointmentId = `appt_${randomUUID().slice(0, 12)}`;
-      await client.query(
-        `INSERT INTO appointment (id, workspace_id, lead_id, user_id, title, start_at, end_at, google_event_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [appointmentId, r.workspaceId, body.leadId, r.userId, body.title, body.startAt, body.endAt, gcalEvent.id],
-      );
+      if (leadId) {
+        await client.query(
+          `INSERT INTO appointment (id, workspace_id, lead_id, user_id, title, start_at, end_at, google_event_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [appointmentId, r.workspaceId, leadId, r.userId, title, startAt, endAt, gcalEvent.id],
+        );
 
-      await implicitAck(client, r.workspaceId, body.leadId, r.userId);
+        await implicitAck(client, r.workspaceId, leadId, r.userId);
+      }
+
       await writeAudit(client, {
         workspaceId: r.workspaceId,
         userId: r.userId,
@@ -317,10 +383,29 @@ calendarRoutes.post('/events', async (req, res, next) => {
         actor: 'user',
       });
 
-      res.status(201).json({ appointmentId, googleEventId: gcalEvent.id });
+      const { recordSyncEvent } = await import('../../integrations/sync-history');
+      await recordSyncEvent({
+        direction: 'outbound',
+        provider: 'google',
+        eventType: 'appointment.created',
+        status: 'ok',
+        referenceId: gcalEvent.id,
+        details: { title, startAt, endAt, appointmentId },
+      });
+
+      res.status(201).json({
+        success: true,
+        appointmentId,
+        eventId: gcalEvent.id,
+        googleEventId: gcalEvent.id,
+        htmlLink: gcalEvent.htmlLink,
+      });
     });
   } catch (err) { next(err); }
-});
+}
+
+calendarRoutes.post('/events', handleCreateOrBookEvent);
+calendarRoutes.post('/book', handleCreateOrBookEvent);
 
 // ── PATCH /events/:id: Update/reschedule an appointment ───────────────────────
 calendarRoutes.patch('/events/:id', async (req, res, next) => {

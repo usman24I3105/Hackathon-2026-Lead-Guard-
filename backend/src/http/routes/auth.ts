@@ -122,8 +122,9 @@ authRoutes.post('/login', loginRateLimit, async (req, res, next) => {
       role: string;
       permissions: string[];
       name: string;
+      email: string;
     }>(
-      `SELECT id, workspace_id, password_hash, role, permissions, name
+      `SELECT id, workspace_id, password_hash, role, permissions, name, email
        FROM "user" WHERE email = $1`,
       [email],
     );
