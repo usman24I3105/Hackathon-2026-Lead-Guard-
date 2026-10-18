@@ -398,10 +398,7 @@ async function handleCreateOrBookEvent(req: any, res: any, next: any) {
         }
 
         if (busyList.length > 0) {
-          return res.status(409).json({
-            error: 'Scheduling conflict: The employee is already busy.',
-            busy: busyList,
-          });
+          throw new AppError(409, 'conflict', 'Scheduling conflict: The employee is already busy at this time.', { busy: busyList });
         }
       }
 

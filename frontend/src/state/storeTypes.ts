@@ -41,7 +41,7 @@ export interface StoreLike {
   retryMessage(messageId: string): void;
   createPaymentLink(contactId: string, amountCents: number, memo: string): Payment;
   toggleOptOut(contactId: string, optedOut: boolean): void;
-  bookAppointment(contactId: string, title: string, start: string, end: string): Appointment;
+  bookAppointment(contactId: string, title: string, start: string, end: string): Appointment | Promise<Appointment>;
   cancelAppointment(id: string): void;
   addStage(name: string): void;
   setStageConfig(id: string, patch: { requiredFields?: string[]; isClosed?: boolean }): void;

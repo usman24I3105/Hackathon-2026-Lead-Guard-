@@ -416,9 +416,14 @@ class RealStore implements StoreLike {
     fireAndForget(apiFetch(`/crm/contacts/${contactId}`, { method: "PATCH", body: JSON.stringify({ optedOut }) }));
   }
 
-  bookAppointment(contactId: string, title: string, start: string, end: string): Appointment {
+  async bookAppointment(contactId: string, title: string, start: string, end: string): Promise<Appointment> {
+    const res = await apiFetch<{ appointmentId?: string }>("/calendar/events", {
+      method: "POST",
+      body: JSON.stringify({ contactId, leadId: contactId, title, startAt: start, endAt: end }),
+    });
+
     const appt: Appointment = {
-      id: `appt_${Date.now()}`,
+      id: res?.appointmentId || `appt_${Date.now()}`,
       contactId,
       title,
       start,
@@ -427,18 +432,6 @@ class RealStore implements StoreLike {
     };
     this.state = { ...this.state, appointments: [appt, ...this.state.appointments] };
     this.notify();
-
-    fireAndForget(
-      apiFetch<{ appointmentId?: string }>("/calendar/events", {
-        method: "POST",
-        body: JSON.stringify({ contactId, leadId: contactId, title, startAt: start, endAt: end }),
-      }).then((res) => {
-        if (res?.appointmentId) {
-          appt.id = res.appointmentId;
-          this.notify();
-        }
-      })
-    );
     return appt;
   }
 

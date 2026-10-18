@@ -22,13 +22,13 @@ export function AppointmentsPanel({ contactId }: { contactId: string }) {
   const calendar = integrations.find((i) => i.key === "google");
   const calendarReady = calendar?.status === "connected";
 
-  function book(e: FormEvent) {
+  async function book(e: FormEvent) {
     e.preventDefault();
     if (!date) return;
     const start = new Date(date).toISOString();
     const end = new Date(new Date(date).getTime() + 3600_000).toISOString();
     try {
-      store.bookAppointment(contactId, title, start, end);
+      await store.bookAppointment(contactId, title, start, end);
       push("Appointment booked.", "success");
       setOpen(false);
     } catch (error) {

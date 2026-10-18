@@ -42,8 +42,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   }
 
   const body = await res.json().catch(() => ({}));
-  const code: string = body?.error?.code ?? "unknown";
-  const message: string = body?.error?.message ?? res.statusText;
+  const code: string = body?.error?.code ?? (typeof body?.error === "string" ? body.error : "unknown");
+  const message: string = body?.error?.message ?? (typeof body?.error === "string" ? body.error : (body?.message ?? res.statusText));
   const requestId: string | undefined = body?.error?.requestId;
 
   if (res.status === 401) {

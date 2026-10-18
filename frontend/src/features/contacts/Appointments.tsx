@@ -33,18 +33,18 @@ export default function Appointments() {
     return `${appointment.title} ${contact?.name ?? ""} ${contact?.phone ?? ""}`.toLowerCase().includes(query.toLowerCase());
   }).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()), [appointments, contacts, query, status]);
 
-  function book(event: FormEvent) {
+  async function book(event: FormEvent) {
     event.preventDefault();
     const effectiveContactId = contactId || contacts[0]?.id || "";
     const startAt = new Date(start);
     if (!calendarReady || !effectiveContactId || !title.trim() || Number.isNaN(startAt.getTime()) || startAt.getTime() <= Date.now()) return;
     const endAt = new Date(startAt.getTime() + 60 * 60 * 1000);
     try {
-      store.bookAppointment(effectiveContactId, title.trim(), startAt.toISOString(), endAt.toISOString());
+      await store.bookAppointment(effectiveContactId, title.trim(), startAt.toISOString(), endAt.toISOString());
       push("Appointment booked.", "success");
       setCreateOpen(false); setStart(""); setTitle("Inspection");
     } catch (error) {
-      push(error instanceof Error ? error.message : "Calendar booking is unavailable.", "error");
+      push(error instanceof Error ? error.message : "Scheduling conflict: Time slot is already booked.", "error");
     }
   }
 
