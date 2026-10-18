@@ -8,7 +8,11 @@ import type { StoreLike } from "../state/storeTypes";
  * the bundle. scripts/check-bundle.mjs verifies that after every build.
  */
 export async function createStore(): Promise<StoreLike> {
-  if (import.meta.env.DEV || import.meta.env.VITE_API_MODE === "mock") {
+  if (
+    import.meta.env.VITE_API_MODE === "mock" ||
+    import.meta.env.MODE === "test" ||
+    (typeof process !== "undefined" && process.env.NODE_ENV === "test")
+  ) {
     const mod = await import("../mock/store");
     return mod.store;
   }
