@@ -118,12 +118,14 @@ async function markNotificationDone(
   error: string | null,
   skipReason: string | null,
 ): Promise<void> {
+  const finalError = error ?? skipReason;
+  const sentAt = finalError ? null : new Date();
   await workerPool.query(
     `UPDATE notification
-     SET sent_at = CASE WHEN $1 IS NULL AND $2 IS NULL THEN NOW() ELSE NULL END,
-         error = $1
+     SET sent_at = $1,
+         error = $2
      WHERE id = $3`,
-    [error ?? skipReason, null, notificationId],
+    [sentAt, finalError, notificationId],
   );
 }
 
