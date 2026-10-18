@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { Button } from "../../components/Primitives";
 import { Icon, ShieldLogo } from "../../components/icons";
+import { useThemePreference } from "../../lib/useThemePreference";
 import "./landing.css";
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 const NAV_LINKS = [
   { href: "#how-it-works", label: "How it works" },
@@ -48,13 +50,13 @@ const CAPABILITIES = [
     icon: "leads" as const,
     title: "Lead operations",
     body: "Capture enquiries, assign a clear owner, and keep response deadlines visible.",
-    links: "Relay · Lead records · Recovery",
+    links: "Dashboard · Relay · Lead records · Recovery",
   },
   {
     icon: "contacts" as const,
     title: "Customer context",
     body: "Keep people, companies, conversations, and opportunities connected in one view.",
-    links: "Contacts · Companies · Pipeline",
+    links: "Contacts · Companies · Opportunities · Pipeline",
   },
   {
     icon: "calendar" as const,
@@ -66,7 +68,7 @@ const CAPABILITIES = [
     icon: "team" as const,
     title: "Team control",
     body: "See availability, review the activity trail, and manage workspace connections.",
-    links: "Team · Audit · Integrations · Settings",
+    links: "Team · Audit · Integrations · Roles & settings",
   },
 ];
 
@@ -76,12 +78,12 @@ function RelayPreview() {
   const current = DEMO_STEPS[step];
 
   useEffect(() => {
-    if (!playing) return;
-    if (step === DEMO_STEPS.length - 1) {
-      setPlaying(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setStep((currentStep) => Math.min(currentStep + 1, DEMO_STEPS.length - 1)), 1100);
+    if (!playing || step >= DEMO_STEPS.length - 1) return;
+    const timer = window.setTimeout(() => {
+      const nextStep = Math.min(step + 1, DEMO_STEPS.length - 1);
+      setStep(nextStep);
+      if (nextStep === DEMO_STEPS.length - 1) setPlaying(false);
+    }, 1100);
     return () => window.clearTimeout(timer);
   }, [playing, step]);
 
@@ -110,7 +112,10 @@ function RelayPreview() {
             <span className={`landing-demo-state-badge state-${step}`}>{current.status}</span>
           </div>
 
-          <div className="landing-demo-track" style={{ "--demo-progress": `${current.position}%` } as React.CSSProperties}>
+          <div className="landing-demo-track" style={{
+            "--demo-progress": `${current.position}%`,
+            "--demo-marker": `${16.66 + current.position * 0.6668}%`,
+          } as CSSProperties}>
             <div className="landing-demo-track-line"><span /></div>
             <span className="landing-demo-track-marker" aria-hidden="true" />
             {DEMO_STEPS.map((item, index) => (
@@ -155,6 +160,7 @@ function RelayPreview() {
 
 export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { resolved: theme, toggle: toggleTheme } = useThemePreference();
 
   useEffect(() => {
     const elements = document.querySelectorAll<HTMLElement>(".landing-reveal");
@@ -192,6 +198,9 @@ export default function LandingPage() {
               <Link className="landing-mobile-signin" to="/login" onClick={() => setMenuOpen(false)}>Sign in</Link>
             </nav>
             <div className="landing-nav-actions">
+              <button type="button" className="landing-theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
+                <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />
+              </button>
               <Link to="/login" className="landing-signin">Sign in</Link>
               <Link to="/signup" className="brand-gradient-button landing-nav-cta">Create workspace <Icon name="arrow-right" size={15} /></Link>
             </div>
@@ -275,7 +284,7 @@ export default function LandingPage() {
             </ul>
             <Link to="/signup" className="landing-text-link">Set up your workspace <Icon name="arrow-right" size={15} /></Link>
           </div>
-          <div className="landing-focus-art" aria-label="Illustration of a lead moving through a team handoff">
+          <div className="landing-focus-art" role="img" aria-label="Illustration of a lead moving through a team handoff">
             <div className="landing-art-orbit orbit-one" />
             <div className="landing-art-orbit orbit-two" />
             <div className="landing-art-path"><span /><span /><span /></div>
@@ -302,7 +311,7 @@ export default function LandingPage() {
           <p>Clear ownership. Faster follow-up.</p>
           <div className="landing-footer-links"><a href="#how-it-works">How it works</a><a href="#platform">Platform</a><Link to="/login">Sign in</Link></div>
         </div>
-        <div className="landing-footer-bottom"><span>© {new Date().getFullYear()} LeadGuard</span><span>Every lead deserves a next step.</span></div>
+        <div className="landing-footer-bottom"><span>© {CURRENT_YEAR} LeadGuard</span><span>Every lead deserves a next step.</span></div>
       </footer>
     </div>
   );

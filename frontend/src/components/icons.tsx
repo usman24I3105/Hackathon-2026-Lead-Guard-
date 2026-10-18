@@ -4,7 +4,7 @@ export type IconName =
   | "dashboard" | "leads" | "recovery" | "pipeline" | "contacts" | "integrations"
   | "companies" | "opportunities" | "message" | "payments" | "calendar" | "team" | "activity"
   | "audit" | "settings" | "search" | "menu" | "close" | "chevron-down" | "logout" | "check"
-  | "sun" | "moon" | "plus" | "command" | "chevron-left";
+  | "sun" | "moon" | "plus" | "command" | "chevron-left" | "arrow-right" | "play" | "shield";
 
 const PATHS: Record<IconName, ReactNode> = {
   dashboard: (
@@ -110,6 +110,9 @@ const PATHS: Record<IconName, ReactNode> = {
     <path d="M9 7V5a2 2 0 1 0-2 2h10a2 2 0 1 0-2-2v14a2 2 0 1 0 2-2H7a2 2 0 1 0 2 2V7z" />
   </>,
   "chevron-left": <path d="m15 18-6-6 6-6" />,
+  "arrow-right": <path d="M5 12h14m-6-6 6 6-6 6" />,
+  play: <path d="m8 5 12 7-12 7V5z" />,
+  shield: <><path d="M12 3 19 6v5c0 4.7-2.8 8-7 10-4.2-2-7-5.3-7-10V6l7-3z" /><path d="m9 12 2 2 4-4" /></>,
 };
 
 /** Decorative by default (aria-hidden); pass `label` for a standalone meaningful icon. */

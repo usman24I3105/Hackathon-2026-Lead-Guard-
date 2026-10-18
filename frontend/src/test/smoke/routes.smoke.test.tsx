@@ -21,6 +21,7 @@ describe("route smoke test", () => {
     const routes = [
       "/login",
       "/signup",
+      "/",
       "/relay",
       "/leads",
       "/pipeline",

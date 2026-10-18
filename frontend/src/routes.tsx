@@ -21,6 +21,7 @@ import Payments from "./features/contacts/Payments";
 import Appointments from "./features/contacts/Appointments";
 import TeamWorkspace from "./features/settings/TeamWorkspace";
 import PublicForm from "./features/publicform/PublicForm";
+import LandingPage from "./features/marketing/LandingPage";
 
 export function AppRoutes() {
   return (
@@ -156,8 +157,8 @@ export function AppRoutes() {
         <Route path="/settings" element={<Settings />} />
       </Route>
 
-      <Route path="/" element={<Navigate to="/relay" replace />} />
-      <Route path="*" element={<Navigate to="/relay" replace />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

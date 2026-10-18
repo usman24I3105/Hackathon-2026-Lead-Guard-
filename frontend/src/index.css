@@ -1,26 +1,23 @@
 @import "tailwindcss";
 
 /*
- * Design tokens (DASHBOARD-SPEC §1). Every color is a CSS variable so a dark
- * theme can later override this one block without touching components.
+ * Shared design tokens. Light and dark themes use the same semantic roles,
+ * so screens can switch palettes without changing component structure.
  * Solid status colors (--success, --warning, --danger) are for fills, dots
  * and icons only; they fail AA as text on white, so text uses the *-text
  * variants.
  */
 :root {
-  --bg: #f7f5fa;
+  --bg: #f8fafc;
   --surface: #ffffff;
-  --text: #252131;
-  /* Spec says #64748b, but that's 4.32:1 on --bg (fails AA). This is the
-     nearest shade that passes on --bg, --neutral-bg and --primary-soft. */
-  --text-muted: #6d6578;
-  --border: #e7e1ec;
-  /* Input/control outlines need ≥3:1 against white (WCAG 1.4.11); --border doesn't. */
-  --border-strong: #8b8195;
+  --text: #1e293b;
+  --text-muted: #526174;
+  --border: #e2e8f0;
+  --border-strong: #7c8798;
 
   --primary: #684ac0;
   --primary-hover: #5539aa;
-  --primary-soft: #f1edfa;
+  --primary-soft: #f0edfa;
   --primary-accent: #bd4b87;
   --gradient-start: #6748cb;
   --gradient-middle: #963fa7;
@@ -38,9 +35,9 @@
   --danger: #df5065;
   --danger-text: #b73046;
   --danger-bg: #fff0f2;
-  --neutral: #e6e0ec;
-  --neutral-text: #5e5669;
-  --neutral-bg: #f1eef5;
+  --neutral: #e4e4e7;
+  --neutral-text: #52525b;
+  --neutral-bg: #f4f4f5;
 
   /* Legacy names from the original build; kept as aliases so existing pages
      restyle with the new palette. Prefer the semantic names above in new code. */
@@ -68,16 +65,16 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #100e18;
-  --surface: #191522;
-  --text: #f7f3fb;
-  --text-muted: #b0a6bd;
-  --border: #342c40;
-  --border-strong: #786d83;
+  --bg: #121212;
+  --surface: #1b1b1b;
+  --text: #e0e0e0;
+  --text-muted: #adadad;
+  --border: #444444;
+  --border-strong: #727272;
 
   --primary: #c1adfa;
   --primary-hover: #d0c1ff;
-  --primary-soft: #302442;
+  --primary-soft: #2d2738;
   --primary-accent: #e18bb5;
   --gradient-start: #755bd0;
   --gradient-middle: #a34baf;
@@ -95,9 +92,9 @@
   --danger: #fb7185;
   --danger-text: #ffa0ae;
   --danger-bg: #471d2a;
-  --neutral: #41384c;
-  --neutral-text: #d0c7db;
-  --neutral-bg: #241e2c;
+  --neutral: #3c3c3c;
+  --neutral-text: #c7c7c7;
+  --neutral-bg: #292929;
 
   --paper: var(--bg);
   --ink: var(--text);
@@ -259,19 +256,19 @@ p {
 .flash-row { animation: flash-highlight 0.6s var(--ease-out); }
 
 .app-sidebar {
-  background: #171320;
-  border-color: #30283b;
-  color: #f4eff8;
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
 }
-.sidebar-brand { border-color: #30283b; }
-.sidebar-group-title { color: #a89db3; }
-.sidebar-link { color: #b8aec3; }
-.sidebar-link:hover { color: #faf5ff; background: #241c30; }
-.sidebar-link[aria-current="page"] { color: #fff3fb; background: var(--brand-gradient-soft); }
+.sidebar-brand { border-color: var(--border); }
+.sidebar-group-title { color: var(--text-muted); }
+.sidebar-link { color: var(--text-muted); }
+.sidebar-link:hover { color: var(--text); background: var(--neutral-bg); }
+.sidebar-link[aria-current="page"] { color: var(--text); background: var(--brand-gradient-soft); }
 .sidebar-link[aria-current="page"]::before { background: var(--brand-gradient); }
-.sidebar-user { border-color: #30283b; }
-.sidebar-user-name { color: #f7f3fb; }
-.sidebar-user-role { color: #b0a6bd; }
+.sidebar-user { border-color: var(--border); }
+.sidebar-user-name { color: var(--text); }
+.sidebar-user-role { color: var(--text-muted); }
 
 .sidebar-group-title { letter-spacing: 0; }
 .sidebar-link[aria-current="page"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gradient-middle) 24%, transparent); }
