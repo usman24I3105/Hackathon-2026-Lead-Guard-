@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import { Pool } from 'pg';
 import { hashPassword } from '../security/password';
+import { backfillHistory } from './backfill-history';
+import { seedCrmConfig, seedDemoOpportunities, seedSecondWorkspace } from './seed-crm';
 
 /**
  * BE-15: Demo seed — implements contract §5 exactly.
@@ -38,11 +40,13 @@ async function seed(): Promise<void> {
   try {
     await client.query('BEGIN');
     await client.query("SELECT set_config('app.workspace_id', 'ws_demo', true)");
+    // Operator-only reset: allows the cascade through append-only history tables.
+    await client.query("SELECT set_config('app.allow_purge', 'on', true)");
 
     console.log('🌱 Resetting demo data...');
 
     // Idempotent: delete existing demo workspace (CASCADE handles children)
-    await client.query(`DELETE FROM workspace WHERE id = 'ws_demo'`);
+    await client.query(`DELETE FROM workspace WHERE id IN ('ws_demo', 'ws_acme')`);
 
     // Create workspace
     await client.query(`
@@ -71,17 +75,7 @@ async function seed(): Promise<void> {
       `, [u.id, u.email, u.hash, u.name, u.role, u.status, u.status === 'available']);
     }
 
-    // Create pipeline and stages
-    await client.query(`
-      INSERT INTO pipeline (id, workspace_id, name, position) VALUES ('pip_demo', 'ws_demo', 'Sales', 0)
-    `);
-    const stages = ['New', 'Contacted', 'Proposal', 'Won', 'Lost'];
-    for (let i = 0; i < stages.length; i++) {
-      await client.query(`
-        INSERT INTO stage (id, workspace_id, pipeline_id, name, position)
-        VALUES ($1, 'ws_demo', 'pip_demo', $2, $3)
-      `, [`stg_${i}`, stages[i], i]);
-    }
+    await seedCrmConfig(client);
 
     // Create sample contacts and leads (deadline far in future to avoid instant escalation)
     const farFuture = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
@@ -89,7 +83,7 @@ async function seed(): Promise<void> {
       const contactId = `con_demo_${i}`;
       const leadId = `lead_demo_${i}`;
       await client.query(`
-        INSERT INTO contact (id, workspace_id, name, phone_e164) VALUES ($1, 'ws_demo', $2, $3)
+        INSERT INTO contact (id, workspace_id, name, phone_e164, owner_id, source, last_activity_at) VALUES ($1, 'ws_demo', $2, $3, 'u_imran', 'whatsapp', NOW())
       `, [contactId, `Demo Contact ${i}`, `+1555000${String(i).padStart(4, '0')}`]);
       await client.query(`
         INSERT INTO lead (id, workspace_id, contact_id, owner_id, state, ack_deadline, version)
@@ -102,13 +96,17 @@ async function seed(): Promise<void> {
       const contactId = `con_rec_${i}`;
       const leadId = `lead_rec_${i}`;
       await client.query(`
-        INSERT INTO contact (id, workspace_id, name, phone_e164) VALUES ($1, 'ws_demo', $2, $3)
+        INSERT INTO contact (id, workspace_id, name, phone_e164, owner_id, source, last_activity_at) VALUES ($1, 'ws_demo', $2, $3, 'u_imran', 'whatsapp', NOW())
       `, [contactId, `Recovery Contact ${i}`, `+1555999${String(i).padStart(4, '0')}`]);
       await client.query(`
         INSERT INTO lead (id, workspace_id, contact_id, state, recovery_reason, version)
         VALUES ($1, 'ws_demo', $2, 'recovery', 'No available employee', 1)
       `, [leadId, contactId]);
     }
+
+    await seedDemoOpportunities(client);
+    await seedSecondWorkspace(client, ownerHash);
+    await backfillHistory(client);
 
     await client.query('COMMIT');
     console.log(`✅ Demo seed complete. ${isBig ? '500' : '12'} leads created.`);

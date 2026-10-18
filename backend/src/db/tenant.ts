@@ -12,12 +12,15 @@ import { appPool } from './pool';
 export async function withTenant<T>(
   workspaceId: string,
   fn: (client: PoolClient) => Promise<T>,
+  actorId?: string,
 ): Promise<T> {
   const client = await appPool.connect();
   try {
     await client.query('BEGIN');
     // true = transaction-local; resets when the transaction ends
     await client.query('SELECT set_config($1, $2, true)', ['app.workspace_id', workspaceId]);
+    // Lets history triggers attribute changes to the requesting user.
+    if (actorId) await client.query('SELECT set_config($1, $2, true)', ['app.user_id', actorId]);
     const result = await fn(client);
     await client.query('COMMIT');
     return result;

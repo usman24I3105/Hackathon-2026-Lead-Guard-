@@ -13,6 +13,7 @@ import { authRoutes } from './routes/auth';
 import { teamRoutes } from './routes/team';
 import { leadRoutes } from './routes/leads';
 import { crmRoutes } from './routes/crm';
+import { customizationRoutes } from './routes/customization';
 import { dashboardRoutes } from './routes/dashboard';
 import { auditRoutes } from './routes/audit';
 import { integrationsRoutes } from './routes/integrations';
@@ -127,6 +128,7 @@ export function buildApp(): express.Application {
   app.use('/api/auth', authRoutes);
   app.use('/api/team', teamRoutes);
   app.use('/api/leads', leadRoutes);
+  app.use('/api/crm', customizationRoutes); // takes precedence over legacy CRM handlers
   app.use('/api/crm', crmRoutes);
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/audit', auditRoutes);

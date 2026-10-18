@@ -201,7 +201,7 @@ dashboardRoutes.get('/', async (req, res, next) => {
         userId: u.id,
         name: u.name,
         avatarColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'][i % 5],
-        availability: (u.status === 'on_leave' ? 'on_leave' : u.status === 'busy' ? 'busy' : 'available') as any,
+        availability: (u.status === 'on_leave' ? 'leave' : u.status === 'busy' ? 'busy' : 'available') as any,
         openLeads: parseInt(u.open_leads, 10) || 0,
         capacity: 5,
       }));
