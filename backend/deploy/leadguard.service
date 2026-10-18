@@ -1,0 +1,38 @@
+[Unit]
+Description=LeadGuard Backend Monolith
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=leadguard
+Group=leadguard
+WorkingDirectory=/opt/leadguard/backend
+EnvironmentFile=/opt/leadguard/backend/.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5s
+
+# Security Hardening (SEC-8)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+
+# Filesystem permissions
+ReadWritePaths=/var/log/leadguard /tmp
+
+# Resource limits
+LimitNOFILE=65535
+TimeoutStopSec=15s
+
+[Install]
+WantedBy=multi-user.target

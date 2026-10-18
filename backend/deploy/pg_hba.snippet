@@ -1,0 +1,13 @@
+# ==============================================================================
+# SEC-8: LeadGuard PostgreSQL pg_hba.conf snippet
+# Strict authentication: SCRAM-SHA-256 only on localhost; no remote access.
+# ==============================================================================
+
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+local   all             postgres                                peer
+local   all             all                                     scram-sha-256
+host    leadguard       lg_app          127.0.0.1/32            scram-sha-256
+host    leadguard       lg_worker       127.0.0.1/32            scram-sha-256
+host    leadguard       lg_migrator     127.0.0.1/32            scram-sha-256
+host    all             all             127.0.0.1/32            reject
+host    all             all             ::1/128                 reject

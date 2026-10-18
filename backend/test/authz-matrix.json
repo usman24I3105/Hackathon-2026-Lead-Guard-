@@ -1,0 +1,64 @@
+{
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "expected": { "anonymous": 200, "user": 200, "admin": 200, "owner": 200 }
+    },
+    {
+      "method": "GET",
+      "path": "/api/me",
+      "expected": { "anonymous": 401, "user": 200, "admin": 200, "owner": 200 }
+    },
+    {
+      "method": "GET",
+      "path": "/api/team",
+      "expected": { "anonymous": 401, "user": 200, "admin": 200, "owner": 200 }
+    },
+    {
+      "method": "POST",
+      "path": "/api/team/invite",
+      "expected": { "anonymous": 401, "user": 403, "admin": 200, "owner": 200 }
+    },
+    {
+      "method": "GET",
+      "path": "/api/leads",
+      "expected": { "anonymous": 401, "user": 200, "admin": 200, "owner": 200 }
+    },
+    {
+      "method": "POST",
+      "path": "/api/leads/intake",
+      "expected": { "anonymous": 201, "user": 201, "admin": 201, "owner": 201 }
+    },
+    {
+      "method": "GET",
+      "path": "/api/crm/opportunities",
+      "expected": { "anonymous": 401, "user": 200, "admin": 200, "owner": 200 }
+    },
+    {
+      "method": "GET",
+      "path": "/api/dashboard",
+      "expected": { "anonymous": 401, "user": 200, "admin": 200, "owner": 200 }
+    },
+    {
+      "method": "GET",
+      "path": "/api/audit",
+      "expected": { "anonymous": 401, "user": 200, "admin": 200, "owner": 200 }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/audit/123",
+      "expected": { "anonymous": 401, "user": 405, "admin": 405, "owner": 405 }
+    },
+    {
+      "method": "GET",
+      "path": "/api/integrations",
+      "expected": { "anonymous": 401, "user": 200, "admin": 200, "owner": 200 }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/integrations/twilio",
+      "expected": { "anonymous": 401, "user": 403, "admin": 403, "owner": 200 }
+    }
+  ]
+}

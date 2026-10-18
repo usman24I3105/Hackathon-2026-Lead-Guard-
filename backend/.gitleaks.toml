@@ -1,0 +1,20 @@
+# Gitleaks secret detection configuration for LeadGuard (SEC-4 / BE-17)
+title = "LeadGuard Gitleaks Profile"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for dummy test variables and documentation"
+paths = [
+  '''^\.env\.example$''',
+  '''^test/.*''',
+  '''^scripts/.*''',
+  '''^deploy/.*'''
+]
+regexes = [
+  '''AC[a-f0-9]{32}''',
+  '''whsec_[a-f0-9]{32}''',
+  '''sk_test_[a-f0-9]{24,}''',
+  '''changeme_[a-z]+'''
+]
