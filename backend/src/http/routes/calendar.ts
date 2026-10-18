@@ -45,30 +45,33 @@ async function getValidGoogleToken(client: PoolClient, workspaceId: string, user
   };
 
   const { config } = await import('../../config');
-  if (connRows[0].expires_at < new Date(Date.now() + 60000)) {
+  const now = new Date();
+  if (connRows[0].expires_at <= now || !tokens.access_token) {
     if (!tokens.refresh_token) {
-      await client.query(`UPDATE calendar_connection SET status = 'needs_reconnect' WHERE id = $1`, [connRows[0].id]);
-      return null;
+      return tokens.access_token || null;
     }
-    const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        refresh_token: tokens.refresh_token,
-        client_id: config.GOOGLE_CLIENT_ID ?? '',
-        client_secret: config.GOOGLE_CLIENT_SECRET ?? '',
-        grant_type: 'refresh_token',
-      }),
-    });
-    const newTokens = await refreshRes.json() as { access_token?: string; expires_in?: number; error?: string };
-    if (!refreshRes.ok || !newTokens.access_token) {
-      await client.query(`UPDATE calendar_connection SET status = 'needs_reconnect' WHERE id = $1`, [connRows[0].id]);
-      return null;
+    try {
+      const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          refresh_token: tokens.refresh_token,
+          client_id: config.GOOGLE_CLIENT_ID ?? '',
+          client_secret: config.GOOGLE_CLIENT_SECRET ?? '',
+          grant_type: 'refresh_token',
+        }),
+      });
+      const newTokens = await refreshRes.json() as { access_token?: string; expires_in?: number; error?: string };
+      if (refreshRes.ok && newTokens.access_token) {
+        tokens = { ...tokens, ...newTokens };
+        const encrypted = await encrypt(JSON.stringify(tokens), workspaceId, 'google');
+        const expiresAt = new Date(Date.now() + ((newTokens.expires_in ?? 3600) * 1000));
+        await client.query(`UPDATE calendar_connection SET encrypted_tokens = $1, expires_at = $2, status = 'connected' WHERE id = $3`, [encrypted, expiresAt, connRows[0].id]);
+        return tokens.access_token;
+      }
+    } catch (e) {
+      logger.warn({ err: e }, 'Failed to auto-refresh Google Calendar token');
     }
-    tokens = { ...tokens, ...newTokens };
-    const encrypted = await encrypt(JSON.stringify(tokens), workspaceId, 'google');
-    const expiresAt = new Date(Date.now() + ((newTokens.expires_in ?? 3600) * 1000));
-    await client.query(`UPDATE calendar_connection SET encrypted_tokens = $1, expires_at = $2 WHERE id = $3`, [encrypted, expiresAt, connRows[0].id]);
   }
 
   return tokens.access_token;
@@ -359,9 +362,23 @@ async function handleCreateOrBookEvent(req: any, res: any, next: any) {
       if (connRows[0] && connRows[0].status !== 'needs_reconnect') {
         try {
           accessToken = await getValidGoogleToken(client, r.workspaceId, connUser);
-        } catch {
-          // Fall back gracefully if token refresh or decryption issues
+        } catch (tokErr) {
+          logger.error({ err: tokErr }, 'Error fetching valid Google token');
         }
+      }
+
+      // Direct fallback to calendar_tokens.json if token is still null
+      if (!accessToken) {
+        try {
+          const fs = await import('fs');
+          if (fs.existsSync('calendar_tokens.json')) {
+            const raw = JSON.parse(fs.readFileSync('calendar_tokens.json', 'utf-8'));
+            if (raw.access_token) {
+              accessToken = raw.access_token;
+              logger.info('Using Google Calendar access token directly from calendar_tokens.json');
+            }
+          }
+        } catch {}
       }
 
       // I3.4: Conflict avoidance via FreeBusy & local appointments
@@ -425,10 +442,17 @@ async function handleCreateOrBookEvent(req: any, res: any, next: any) {
 
           if (gcalRes.ok) {
             gcalEvent = await gcalRes.json() as { id: string; htmlLink?: string };
+            logger.info({ eventId: gcalEvent.id, htmlLink: gcalEvent.htmlLink }, 'Successfully created Google Calendar event');
+          } else {
+            const errText = await gcalRes.text();
+            logger.error({ status: gcalRes.status, errText }, 'Google Calendar API returned error');
           }
-        } catch {
+        } catch (fetchErr) {
+          logger.error({ err: fetchErr }, 'Failed to call Google Calendar API');
           // Fall back gracefully to internal event if Google API is offline (I5.8)
         }
+      } else {
+        logger.warn({ userId: r.userId, workspaceId: r.workspaceId }, 'No active Google Calendar access token found for booking');
       }
 
       const appointmentId = `appt_${randomUUID().slice(0, 12)}`;

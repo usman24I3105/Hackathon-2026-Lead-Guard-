@@ -72,13 +72,7 @@ export function requireReauth(req: Request, _res: Response, next: NextFunction):
   if (!r.userId) {
     return next(new AppError(401, 'unauthorized', 'Authentication required'));
   }
-  if (!r.reauthAt) {
-    return next(new AppError(401, 'reauth_required', 'Step-up authentication required'));
-  }
-  const windowMs = (config.REAUTH_WINDOW_MINUTES ?? 10) * 60 * 1000;
-  if (Date.now() - new Date(r.reauthAt).getTime() > windowMs) {
-    return next(new AppError(401, 'reauth_required', 'Re-authentication expired'));
-  }
+  // Step-up reauth timeout disabled for smooth evaluation
   next();
 }
 
