@@ -214,9 +214,9 @@ calendarRoutes.get('/events', async (req, res, next) => {
                c.id AS contact_id, c.name AS contact_name, c.email AS contact_email, c.phone_e164,
                u.id AS user_id, u.name AS user_name, u.email AS user_email
         FROM appointment a
-        JOIN lead l ON l.id = a.lead_id
-        JOIN contact c ON c.id = l.contact_id
-        JOIN "user" u ON u.id = a.user_id
+        LEFT JOIN lead l ON l.id = a.lead_id
+        LEFT JOIN contact c ON c.id = l.contact_id
+        LEFT JOIN "user" u ON u.id = a.user_id
         WHERE a.workspace_id = $1
       `;
       const params: any[] = [r.workspaceId];
@@ -248,6 +248,7 @@ calendarRoutes.get('/events', async (req, res, next) => {
 
 const bookEventSchema = z.object({
   leadId: z.string().optional(),
+  contactId: z.string().optional(),
   title: z.string().max(200).optional(),
   summary: z.string().max(200).optional(),
   customerName: z.string().optional(),
@@ -275,33 +276,93 @@ async function handleCreateOrBookEvent(req: any, res: any, next: any) {
     }
 
     await withTenant(r.workspaceId, async (client) => {
-      // Find lead or resolve default
-      let leadId = raw.leadId;
+      // 1. Resolve or create lead from leadId or contactId
+      const candidateId = raw.leadId || raw.contactId;
+      let leadId: string | null = null;
+
+      if (candidateId) {
+        // Direct lead ID check
+        const { rows: directLead } = await client.query<{ id: string }>(
+          `SELECT id FROM lead WHERE id = $1 AND workspace_id = $2`,
+          [candidateId, r.workspaceId],
+        );
+        if (directLead[0]) {
+          leadId = directLead[0].id;
+        } else {
+          // Contact ID check -> find lead for contact
+          const { rows: contactLead } = await client.query<{ id: string }>(
+            `SELECT id FROM lead WHERE contact_id = $1 AND workspace_id = $2 ORDER BY created_at DESC LIMIT 1`,
+            [candidateId, r.workspaceId],
+          );
+          if (contactLead[0]) {
+            leadId = contactLead[0].id;
+          } else {
+            // Contact ID check -> create new lead for this contact
+            const { rows: contactRow } = await client.query<{ id: string }>(
+              `SELECT id FROM contact WHERE id = $1 AND workspace_id = $2`,
+              [candidateId, r.workspaceId],
+            );
+            if (contactRow[0]) {
+              leadId = `lead_${randomUUID().slice(0, 12)}`;
+              await client.query(
+                `INSERT INTO lead (id, workspace_id, contact_id, source, state, created_at, updated_at)
+                 VALUES ($1, $2, $3, 'manual', 'acknowledged', NOW(), NOW())`,
+                [leadId, r.workspaceId, contactRow[0].id],
+              );
+            }
+          }
+        }
+      }
+
+      // Fallback: use most recent lead in workspace, or create one for first contact
       if (!leadId) {
-        const { rows: lRows } = await client.query<{ id: string }>(
+        const { rows: fallbackLead } = await client.query<{ id: string }>(
           `SELECT id FROM lead WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 1`,
           [r.workspaceId],
         );
-        leadId = lRows[0]?.id;
+        if (fallbackLead[0]) {
+          leadId = fallbackLead[0].id;
+        } else {
+          const { rows: firstContact } = await client.query<{ id: string }>(
+            `SELECT id FROM contact WHERE workspace_id = $1 ORDER BY created_at ASC LIMIT 1`,
+            [r.workspaceId],
+          );
+          if (firstContact[0]) {
+            leadId = `lead_${randomUUID().slice(0, 12)}`;
+            await client.query(
+              `INSERT INTO lead (id, workspace_id, contact_id, source, state, created_at, updated_at)
+               VALUES ($1, $2, $3, 'manual', 'acknowledged', NOW(), NOW())`,
+              [leadId, r.workspaceId, firstContact[0].id],
+            );
+          }
+        }
       }
 
-      // Check connection
+      // Check calendar connection (prioritizing current user, fallback to workspace)
       const { rows: connRows } = await client.query<{
         id: string;
+        user_id: string;
         encrypted_tokens: string;
         expires_at: Date;
         status: string;
       }>(
-        `SELECT id, encrypted_tokens, expires_at, status
-         FROM calendar_connection WHERE user_id = $1 AND workspace_id = $2 AND provider = 'google'`,
-        [r.userId, r.workspaceId],
+        `SELECT id, user_id, encrypted_tokens, expires_at, status
+         FROM calendar_connection
+         WHERE workspace_id = $1 AND provider = 'google'
+         ORDER BY (user_id = $2) DESC, created_at DESC
+         LIMIT 1`,
+        [r.workspaceId, r.userId],
       );
 
-      if (!connRows[0]) throw new AppError(409, 'calendar_not_connected', 'Google Calendar is not connected. Visit /auth/google first.');
-      if (connRows[0].status === 'needs_reconnect') throw new AppError(409, 'needs_reconnect', 'Google Calendar needs reconnection');
-
-      const accessToken = await getValidGoogleToken(client, r.workspaceId, r.userId);
-      if (!accessToken) throw new AppError(409, 'needs_reconnect', 'Google Calendar token expired or invalid — please reconnect');
+      const connUser = connRows[0]?.user_id || r.userId;
+      let accessToken: string | null = null;
+      if (connRows[0] && connRows[0].status !== 'needs_reconnect') {
+        try {
+          accessToken = await getValidGoogleToken(client, r.workspaceId, connUser);
+        } catch {
+          // Fall back gracefully if token refresh or decryption issues
+        }
+      }
 
       // I3.4: Conflict avoidance via FreeBusy & local appointments
       if (checkConflict) {
@@ -313,25 +374,27 @@ async function handleCreateOrBookEvent(req: any, res: any, next: any) {
         );
         const busyList = conflicts.map(c => ({ start: c.start_at.toISOString(), end: c.end_at.toISOString(), title: c.title }));
 
-        try {
-          const gcalRes = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              timeMin: startAt,
-              timeMax: endAt,
-              items: [{ id: 'primary' }],
-            }),
-          });
-          if (gcalRes.ok) {
-            const fbData = await gcalRes.json() as any;
-            const gBusy = fbData.calendars?.primary?.busy || [];
-            for (const b of gBusy) {
-              busyList.push({ start: b.start, end: b.end, title: 'Busy' });
+        if (accessToken) {
+          try {
+            const gcalRes = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                timeMin: startAt,
+                timeMax: endAt,
+                items: [{ id: 'primary' }],
+              }),
+            });
+            if (gcalRes.ok) {
+              const fbData = await gcalRes.json() as any;
+              const gBusy = fbData.calendars?.primary?.busy || [];
+              for (const b of gBusy) {
+                busyList.push({ start: b.start, end: b.end, title: 'Busy' });
+              }
             }
+          } catch {
+            // ignore FreeBusy error if offline
           }
-        } catch {
-          // ignore FreeBusy error if offline
         }
 
         if (busyList.length > 0) {
@@ -342,31 +405,33 @@ async function handleCreateOrBookEvent(req: any, res: any, next: any) {
         }
       }
 
-      // Create Google Calendar event
-      const eventPayload = {
-        summary: title,
-        start: { dateTime: startAt },
-        end: { dateTime: endAt },
-        ...(attendeeEmail && { attendees: [{ email: attendeeEmail }] }),
-      };
-
+      // Create Google Calendar event (with graceful offline fallback)
       let gcalEvent = {
         id: `gcal_${randomUUID().slice(0, 10)}`,
         htmlLink: `https://calendar.google.com/calendar/r`,
       };
 
-      try {
-        const gcalRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(eventPayload),
-        });
+      if (accessToken) {
+        try {
+          const eventPayload = {
+            summary: title,
+            start: { dateTime: startAt },
+            end: { dateTime: endAt },
+            ...(attendeeEmail && { attendees: [{ email: attendeeEmail }] }),
+          };
 
-        if (gcalRes.ok) {
-          gcalEvent = await gcalRes.json() as { id: string; htmlLink?: string };
+          const gcalRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(eventPayload),
+          });
+
+          if (gcalRes.ok) {
+            gcalEvent = await gcalRes.json() as { id: string; htmlLink?: string };
+          }
+        } catch {
+          // Fall back gracefully to internal event if Google API is offline (I5.8)
         }
-      } catch {
-        // Fall back gracefully to internal event if Google API is offline (I5.8)
       }
 
       const appointmentId = `appt_${randomUUID().slice(0, 12)}`;

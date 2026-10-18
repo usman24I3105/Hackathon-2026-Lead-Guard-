@@ -35,11 +35,12 @@ export default function Appointments() {
 
   function book(event: FormEvent) {
     event.preventDefault();
+    const effectiveContactId = contactId || contacts[0]?.id || "";
     const startAt = new Date(start);
-    if (!calendarReady || !contactId || !title.trim() || Number.isNaN(startAt.getTime()) || startAt.getTime() <= Date.now()) return;
+    if (!calendarReady || !effectiveContactId || !title.trim() || Number.isNaN(startAt.getTime()) || startAt.getTime() <= Date.now()) return;
     const endAt = new Date(startAt.getTime() + 60 * 60 * 1000);
     try {
-      store.bookAppointment(contactId, title.trim(), startAt.toISOString(), endAt.toISOString());
+      store.bookAppointment(effectiveContactId, title.trim(), startAt.toISOString(), endAt.toISOString());
       push("Appointment booked.", "success");
       setCreateOpen(false); setStart(""); setTitle("Inspection");
     } catch (error) {
@@ -58,14 +59,16 @@ export default function Appointments() {
     setCancelId(null);
   }, [cancelId, push]);
 
+  const activeContactId = contactId || contacts[0]?.id || "";
+
   return <div className="p-4 sm:p-6">
     <header className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p className="mb-1 text-xs font-medium text-primary">Communication</p><h1 className="text-2xl font-semibold">Appointments</h1><p className="mt-1 text-sm text-text-muted">Keep inspections and follow-ups coordinated with customer records.</p></div><Button onClick={() => setCreateOpen((open) => !open)} disabled={!calendarReady}>Book appointment</Button></header>
     {!calendarReady && <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-card border border-warning/30 bg-warning-bg px-4 py-3 text-sm text-warning-text"><span>Google Calendar needs to be connected before appointments can be booked.</span><Link to="/integrations" className="font-medium underline underline-offset-2">Manage integrations</Link></div>}
     {createOpen && <Card className="mb-4 p-4"><form onSubmit={book} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:items-end">
-      <FormField label="Contact" htmlFor="appointment-contact" required><Select id="appointment-contact" value={contactId} onChange={(event) => setContactId(event.target.value)} required>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}</Select></FormField>
+      <FormField label="Contact" htmlFor="appointment-contact" required><Select id="appointment-contact" value={activeContactId} onChange={(event) => setContactId(event.target.value)} required>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}</Select></FormField>
       <FormField label="Appointment title" htmlFor="appointment-title" required><Input id="appointment-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={80} required /></FormField>
       <FormField label="Start date and time" htmlFor="appointment-start" required><Input id="appointment-start" type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} min={minimumStart} required /></FormField>
-      <div className="flex gap-2"><Button type="submit" disabled={!calendarReady || !contactId || !title.trim() || !start}>Book one-hour slot</Button><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button></div>
+      <div className="flex gap-2"><Button type="submit" disabled={!calendarReady || !activeContactId || !title.trim() || !start}>Book one-hour slot</Button><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button></div>
     </form><p className="mt-3 text-xs text-text-muted">Availability and the final booking response come from the calendar integration.</p></Card>}
     <div className="mb-4 flex flex-wrap gap-2"><Input aria-label="Search appointments" placeholder="Search customer or appointment…" value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-52 flex-1 sm:max-w-sm" /><Select aria-label="Filter appointments by status" value={status} onChange={(event) => setStatus(event.target.value)} className="w-auto"><option value="all">All appointments</option><option value="booked">Booked</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></Select></div>
     <Card className="overflow-hidden">

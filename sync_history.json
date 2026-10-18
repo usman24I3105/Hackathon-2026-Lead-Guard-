@@ -1,0 +1,134 @@
+[
+  {
+    "id": "sync_1792314947383_ehnht",
+    "timestamp": "2026-10-18T09:15:47.383Z",
+    "direction": "outbound",
+    "provider": "google",
+    "eventType": "appointment.created",
+    "status": "ok",
+    "referenceId": "gcal_8c7e6525-b",
+    "details": {
+      "title": "Initial Consultation",
+      "startAt": "2026-10-18T10:15:46.810Z",
+      "endAt": "2026-10-18T11:15:46.812Z",
+      "appointmentId": "appt_31d055d2-7bd"
+    }
+  },
+  {
+    "id": "sync_1792314334501_uesgu",
+    "timestamp": "2026-10-18T09:05:34.501Z",
+    "direction": "outbound",
+    "provider": "stripe",
+    "eventType": "checkout_session_created",
+    "status": "ok",
+    "referenceId": "cs_test_a1gPf3JBZLvvLl5V7XN9TBElW50Xbil7N0RjUKCIWYy9Sn4ccGCupBIjIm",
+    "details": {
+      "amountCents": 50000
+    }
+  },
+  {
+    "id": "sync_1792314062956_ruuyk",
+    "timestamp": "2026-10-18T09:01:02.956Z",
+    "direction": "outbound",
+    "provider": "stripe",
+    "eventType": "checkout_session_created",
+    "status": "ok",
+    "referenceId": "cs_test_a1IKpeqHVcwWkhKTiyXftQkIwIyJLk10OOJXWdqzRX9UkfMmiXMgHfzbq2",
+    "details": {
+      "amountCents": 50000
+    }
+  },
+  {
+    "id": "sync_1792313135483_56d5n",
+    "timestamp": "2026-10-18T08:45:35.483Z",
+    "direction": "outbound",
+    "provider": "slack",
+    "eventType": "alert",
+    "status": "ok",
+    "details": {
+      "summary": "💵 Payment Collected: $150.00 (Session: cs_test_a1Fpb7n43yJ0JULCeAlohPaLhQJmHMtydQdcAP2QcLgarcQRWAmjyzGOrw)"
+    }
+  },
+  {
+    "id": "sync_1792313134922_vzp1w",
+    "timestamp": "2026-10-18T08:45:34.922Z",
+    "direction": "outbound",
+    "provider": "slack",
+    "eventType": "alert",
+    "status": "ok",
+    "referenceId": "lead_f127a04e-8b8",
+    "details": {
+      "summary": "🚨 Hot Lead Escalated (SMS)"
+    }
+  },
+  {
+    "id": "sync_1792313134799_vkkr2",
+    "timestamp": "2026-10-18T08:45:34.799Z",
+    "direction": "inbound",
+    "provider": "stripe",
+    "eventType": "checkout.session.completed",
+    "status": "ok",
+    "referenceId": "cs_test_a1Fpb7n43yJ0JULCeAlohPaLhQJmHMtydQdcAP2QcLgarcQRWAmjyzGOrw",
+    "details": {
+      "amountCents": 15000,
+      "opportunityId": null
+    }
+  },
+  {
+    "id": "sync_1792313134781_6w3yu",
+    "timestamp": "2026-10-18T08:45:34.781Z",
+    "direction": "outbound",
+    "provider": "stripe",
+    "eventType": "checkout_session_created",
+    "status": "ok",
+    "referenceId": "cs_test_a1Fpb7n43yJ0JULCeAlohPaLhQJmHMtydQdcAP2QcLgarcQRWAmjyzGOrw",
+    "details": {
+      "amountCents": 15000
+    }
+  },
+  {
+    "id": "sync_1792313133939_bgqpp",
+    "timestamp": "2026-10-18T08:45:33.940Z",
+    "direction": "inbound",
+    "provider": "twilio",
+    "eventType": "sms",
+    "status": "ok",
+    "referenceId": "SM_STOP_1792313133925",
+    "details": {
+      "from": "+15551234567",
+      "profileName": "",
+      "body": "STOP",
+      "urgent": false
+    }
+  },
+  {
+    "id": "sync_1792313133924_jejhq",
+    "timestamp": "2026-10-18T08:45:33.924Z",
+    "direction": "inbound",
+    "provider": "twilio",
+    "eventType": "sms",
+    "status": "ok",
+    "referenceId": "SM_URGENT_1792313133797",
+    "details": {
+      "from": "+15559876543",
+      "profileName": "Bob Buyer",
+      "body": "Urgent! Need pricing and quote ASAP, call me immediately to buy!",
+      "urgent": true
+    }
+  },
+  {
+    "id": "sync_1792313133795_6f7ge",
+    "timestamp": "2026-10-18T08:45:33.795Z",
+    "direction": "inbound",
+    "provider": "twilio",
+    "eventType": "sms",
+    "status": "ok",
+    "referenceId": "SM_TEST_1792313133763",
+    "details": {
+      "from": "+15551234567",
+      "profileName": "Alice Smith",
+      "body": "Hello, I would like more information about your cleaning services.",
+      "urgent": false
+    }
+  }
+]

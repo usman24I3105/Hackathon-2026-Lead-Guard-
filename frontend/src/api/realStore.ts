@@ -431,7 +431,7 @@ class RealStore implements StoreLike {
     fireAndForget(
       apiFetch<{ appointmentId?: string }>("/calendar/events", {
         method: "POST",
-        body: JSON.stringify({ leadId: contactId, title, startAt: start, endAt: end }),
+        body: JSON.stringify({ contactId, leadId: contactId, title, startAt: start, endAt: end }),
       }).then((res) => {
         if (res?.appointmentId) {
           appt.id = res.appointmentId;
