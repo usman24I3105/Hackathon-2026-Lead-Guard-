@@ -351,26 +351,60 @@ export class Store implements StoreLike {
   }
 
   sendMessage(contactId: string, body: string) {
+    const contact = this.state.contacts.find((c) => c.id === contactId);
+    if (contact?.optedOut) {
+      throw new Error("Contact has opted out of messaging.");
+    }
+
     const msg: Message = { id: uid("m"), contactId, direction: "out", body, status: "queued", at: new Date().toISOString() };
     this.set((s) => ({ messages: [...s.messages, msg] }));
-    window.setTimeout(() => {
-      this.set((s) => ({ messages: s.messages.map((m) => (m.id === msg.id ? { ...m, status: "sent" } : m)) }));
-      this.emit({ type: "message.updated", contactId });
-    }, 500);
-    window.setTimeout(() => {
-      const delivered = Math.random() > 0.15;
-      this.set((s) => ({
-        messages: s.messages.map((m) => (m.id === msg.id ? { ...m, status: delivered ? "delivered" : "failed" } : m)),
-      }));
-      this.emit({ type: "message.updated", contactId });
-    }, 1600);
+
+    // Real Twilio API dispatch
+    const toPhone = contact?.phone || "+817054633568";
+    fetch("http://localhost:3000/api/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: toPhone,
+        body,
+        isWhatsApp: false,
+        optedOut: contact?.optedOut || false,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        this.set((s) => ({
+          messages: s.messages.map((m) => (m.id === msg.id ? { ...m, status: "sent" } : m)),
+        }));
+        this.emit({ type: "message.updated", contactId });
+        // Simulate delivery confirmation callback
+        window.setTimeout(() => {
+          this.set((s) => ({
+            messages: s.messages.map((m) => (m.id === msg.id ? { ...m, status: "delivered" } : m)),
+          }));
+          this.emit({ type: "message.updated", contactId });
+        }, 1500);
+      })
+      .catch((err) => {
+        console.error("Outbound message failed:", err.message);
+        this.set((s) => ({
+          messages: s.messages.map((m) => (m.id === msg.id ? { ...m, status: "failed" } : m)),
+        }));
+        this.emit({ type: "message.updated", contactId });
+      });
   }
 
   retryMessage(messageId: string) {
+    const msg = this.state.messages.find((m) => m.id === messageId);
+    if (!msg) return;
     this.set((s) => ({ messages: s.messages.map((m) => (m.id === messageId ? { ...m, status: "queued" } : m)) }));
-    window.setTimeout(() => {
-      this.set((s) => ({ messages: s.messages.map((m) => (m.id === messageId ? { ...m, status: "delivered" } : m)) }));
-    }, 900);
+    this.sendMessage(msg.contactId, msg.body);
   }
 
   createPaymentLink(contactId: string, amountCents: number, memo: string) {
@@ -379,16 +413,34 @@ export class Store implements StoreLike {
       contactId,
       amountCents,
       status: "pending",
-      url: `https://checkout.stripe.com/c/pay/cs_test_${Math.random().toString(36).slice(2, 8)}`,
+      url: "",
       createdAt: new Date().toISOString(),
       memo,
     };
     this.set((s) => ({ payments: [payment, ...s.payments] }));
     this.addAudit({ type: "payment.created", userName: "You", after: `$${(amountCents / 100).toFixed(2)} link` });
-    window.setTimeout(() => {
-      this.set((s) => ({ payments: s.payments.map((p) => (p.id === payment.id ? { ...p, status: "paid" } : p)) }));
-      this.emit({ type: "payment.updated", paymentId: payment.id });
-    }, 5000);
+
+    // Call real Stripe backend endpoint
+    fetch("http://localhost:3000/api/stripe/create-checkout-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amountCents,
+        title: memo || "Opportunity Payment",
+        contactId,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.checkoutUrl) {
+          this.set((s) => ({
+            payments: s.payments.map((p) => (p.id === payment.id ? { ...p, url: data.checkoutUrl } : p)),
+          }));
+          this.emit({ type: "payment.updated", paymentId: payment.id });
+        }
+      })
+      .catch((err) => console.error("Stripe Checkout creation failed:", err));
+
     return payment;
   }
 
@@ -397,8 +449,37 @@ export class Store implements StoreLike {
   }
 
   bookAppointment(contactId: string, title: string, start: string, end: string) {
+    const contact = this.state.contacts.find((c) => c.id === contactId);
     const appt: Appointment = { id: uid("a"), contactId, title, start, end, status: "booked" };
     this.set((s) => ({ appointments: [...s.appointments, appt] }));
+
+    // Real Google Calendar booking dispatch
+    fetch("http://localhost:3000/api/calendar/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: contact?.name || "Customer",
+        customerEmail: "demo@example.com",
+        summary: title,
+        startDateTime: start,
+        endDateTime: end,
+        checkConflict: true,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        console.log("Appointment booked on Google Calendar:", data.htmlLink);
+      })
+      .catch((err) => {
+        console.error("Calendar booking failed:", err.message);
+      });
+
     return appt;
   }
 

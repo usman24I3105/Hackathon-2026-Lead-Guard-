@@ -1,7 +1,9 @@
 import { useRef, useState, type FormEvent } from "react";
 import { store, useStoreState } from "../../state/useStore";
 import { Button, FormField, Input, Card } from "../../components/Primitives";
-import { StatusChip, type ChipKind } from "../../components/StatusChip";
+import { EmptyState } from "../../components/Primitives";
+import { Notice, StatusBadge, Tooltip } from "../../components/DesignSystem";
+import { Icon } from "../../components/icons";
 import { dateLabel, clock } from "../../lib/format";
 import { useToast } from "../../state/ToastContext";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -39,18 +41,13 @@ export function AppointmentsPanel({ contactId }: { contactId: string }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink-2 uppercase tracking-wide">Appointments</h3>
-        {calendarReady ? (
-          <Button variant="secondary" onClick={() => setOpen(true)}>+ Book</Button>
-        ) : (
-          <Link to="/integrations" className="text-xs text-text-muted underline underline-offset-2" title="Reconnect Google Calendar in Integrations">
-            Calendar unavailable
-          </Link>
-        )}
+        <h3 className="text-sm font-semibold text-text">Appointments</h3>
+        {calendarReady ? <Button variant="secondary" leadingIcon={<Icon name="plus" size={14} />} onClick={() => setOpen(true)}>Book</Button> : <Tooltip content="Connect Google Calendar to book appointments"><span><Button variant="secondary" disabled>Book</Button></span></Tooltip>}
       </div>
+      {!calendarReady && <Notice variant="warning" action={<Link to="/integrations" className="ui-button ui-button--secondary ui-button--sm">Connect calendar</Link>}>Google Calendar is unavailable.</Notice>}
 
       {list.length === 0 ? (
-        <p className="text-sm text-ink-2">Nothing booked yet.</p>
+        <EmptyState title="Nothing booked yet" body="Appointments for this contact will appear here." />
       ) : (
         <ul className="flex flex-col gap-2">
           {list.map((a) => (
@@ -61,9 +58,9 @@ export function AppointmentsPanel({ contactId }: { contactId: string }) {
                   <div className="text-xs text-ink-2">{dateLabel(a.start)} · {clock(a.start)}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <StatusChip kind={a.status as ChipKind} />
+                  <StatusBadge label={a.status[0].toUpperCase() + a.status.slice(1)} />
                   {a.status === "booked" && (
-                    <button type="button" onClick={() => setCancelId(a.id)} className="text-xs underline text-ink-2 hover:text-ink h-9 px-1">
+                    <button type="button" onClick={() => setCancelId(a.id)} className="ui-button ui-button--danger-ghost ui-button--sm">
                       Cancel
                     </button>
                   )}

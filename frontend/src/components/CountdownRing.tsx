@@ -23,36 +23,37 @@ export function CountdownRing({
   }, [ackDeadline, mode]);
 
   const pct = mode === "acknowledged" ? 1 : mode === "held" ? 0 : Math.max(0, Math.min(1, left / windowSeconds));
-  const r = size / 2 - 5;
+  const r = 18;
   const c = 2 * Math.PI * r;
   const color = mode === "acknowledged" ? "var(--safe)" : mode === "overdue" ? "var(--alarm)" : mode === "held" ? "var(--ink-2)" : "var(--signal)";
   const label =
     mode === "acknowledged" ? "Acknowledged" : mode === "overdue" ? "Overdue" : mode === "held" ? "Held" : `${left} seconds left`;
 
   return (
-    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }} role="img" aria-label={label}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--line)" strokeWidth={5} />
+    <div className="countdown-ring" style={{ width: size, height: size }} role="img" aria-label={label}>
+      <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx={24} cy={24} r={r} fill="none" stroke="var(--line)" strokeWidth={4.25} />
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          className="countdown-progress"
+          cx={24}
+          cy={24}
           r={r}
           fill="none"
           stroke={color}
-          strokeWidth={5}
+          strokeWidth={4.25}
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - pct)}
-          style={{ transition: mode === "running" ? "stroke-dashoffset 0.25s linear" : "stroke-dashoffset 0.3s ease-out, stroke 0.3s" }}
+          transform="rotate(-90 24 24)"
         />
+        {mode === "acknowledged" ? (
+          <path className="countdown-check" d="m16.5 24 5 5 10-11" fill="none" stroke={color} strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" />
+        ) : (
+          <text className="countdown-value" x="24" y="24" dominantBaseline="central" textAnchor="middle" fill={mode === "running" ? "var(--warning-text)" : color}>
+            {mode === "overdue" ? "!" : mode === "held" ? "–" : left}
+          </text>
+        )}
       </svg>
-      {/* Amber is fine for the ring stroke but fails contrast as text, so the numeral uses the darker shade. */}
-      <div
-        className="absolute inset-0 flex items-center justify-center font-mono-tab text-xs"
-        style={{ color: mode === "running" ? "var(--warning-text)" : color }}
-      >
-        {mode === "acknowledged" ? "✓" : mode === "overdue" ? "⚠" : mode === "held" ? "–" : left}
-      </div>
     </div>
   );
 }

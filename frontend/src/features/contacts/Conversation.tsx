@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { store, useStoreState } from "../../state/useStore";
 import { Button, Textarea } from "../../components/Primitives";
+import { Notice, Tooltip } from "../../components/DesignSystem";
+import { Icon } from "../../components/icons";
 import { clock } from "../../lib/format";
 import type { Message } from "../../mock/types";
 import { useAuth } from "../../state/AuthContext";
@@ -19,22 +21,22 @@ function Bubble({ msg, onRetry }: { msg: Message; onRetry?: () => void }) {
   const mine = msg.direction === "out";
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[80%] rounded-[14px] px-3.5 py-2 text-sm ${mine ? "bg-focus text-white" : "bg-paper text-ink border border-line"}`}>
+      <article className={`conversation-bubble ${mine ? "conversation-bubble--out" : "conversation-bubble--in"}`}>
         <p>{msg.body}</p>
-        <div className={`mt-1 flex items-center gap-2 text-[11px] ${mine ? "text-white/75" : "text-ink-2"}`}>
+        <div className="conversation-bubble-meta">
           <span>{clock(msg.at)}</span>
           {mine && (
-            <span style={{ color: msg.status === "failed" ? "var(--danger-bg)" : undefined }}>
+            <span className={msg.status === "failed" ? "text-danger-text" : ""}>
               {TICK[msg.status]} {msg.status === "failed" ? "Failed" : msg.status === "queued" ? "Sending" : msg.status === "sent" ? "Sent" : "Delivered"}
             </span>
           )}
           {mine && msg.status === "failed" && onRetry && (
-            <button type="button" onClick={onRetry} className="underline font-medium">
+            <button type="button" onClick={onRetry} className="app-link font-medium">
               Retry
             </button>
           )}
         </div>
-      </div>
+      </article>
     </div>
   );
 }
@@ -44,7 +46,7 @@ export function Conversation({ contactId, optedOut }: { contactId: string; opted
   const { session } = useAuth();
   const { push } = useToast();
   const [draft, setDraft] = useState("");
-  const thread = messages.filter((m) => m.contactId === contactId);
+  const thread = messages.filter((m) => m.contactId === contactId).sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   const canManage = !session || has({ role: session.role }, "contacts.manage");
   const channelReady = integrations.find((integration) => integration.key === "whatsapp")?.status === "connected";
   const canSend = canManage && channelReady && !optedOut;
@@ -61,37 +63,25 @@ export function Conversation({ contactId, optedOut }: { contactId: string; opted
   }
 
   return (
-    <div className="flex flex-col h-[520px] border border-line rounded-card bg-surface">
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5">
+    <div className="conversation-panel">
+      <div className="conversation-message-list">
         {thread.length === 0 ? (
-          <p className="text-sm text-ink-2 text-center my-auto">No messages yet.</p>
+          <p className="text-sm text-text-muted m-auto">No messages yet.</p>
         ) : (
-          thread.map((m) => <Bubble key={m.id} msg={m} onRetry={canSend ? () => store.retryMessage(m.id) : undefined} />)
+          thread.map((m, index) => {
+            const previous = thread[index - 1];
+            const day = new Date(m.at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+            const previousDay = previous ? new Date(previous.at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : null;
+            return <div key={m.id} className="conversation-message-group">{day !== previousDay && <div className="conversation-day-divider"><span>{day}</span></div>}<Bubble msg={m} onRetry={canSend ? () => store.retryMessage(m.id) : undefined} /></div>;
+          })
         )}
       </div>
-      <div className="border-t border-line p-3">
-        {!canSend ? (
-          <p className="text-sm text-text-muted rounded-card border border-border bg-neutral-bg px-3 py-2.5 text-center">
-            {optedOut ? "Contact opted out. Messaging is disabled." : !canManage ? "Your role can review this conversation but cannot send replies." : <>WhatsApp is not connected. <Link to="/integrations" className="font-medium text-primary underline">Manage integrations</Link></>}
-          </p>
-        ) : (
-          <div className="flex items-end gap-2">
-            <Textarea
-              aria-label="Message"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              placeholder="Write a reply…"
-              className="flex-1"
-            />
-            <Button onClick={send} disabled={!draft.trim()}>Send</Button>
-          </div>
-        )}
+      <div className="conversation-composer">
+        {!canSend && <Notice variant={optedOut ? "restricted" : "warning"} className="mb-2">{optedOut ? "Messaging is disabled because this contact opted out." : !canManage ? "Your role can review this conversation but cannot send replies." : <>WhatsApp is not connected. <Link to="/integrations" className="app-link">Manage integrations</Link></>}</Notice>}
+        <div className="flex items-end gap-2">
+          <Textarea aria-label="Message" value={draft} disabled={!canSend} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={canSend ? "Write a reply…" : "Replies are unavailable"} className="flex-1" />
+          {canSend ? <Button onClick={send} disabled={!draft.trim()} leadingIcon={<Icon name="arrow-right" size={15} />}>Send</Button> : <Tooltip content={optedOut ? "This contact has opted out" : !canManage ? "You need contacts.manage permission to send" : "Connect WhatsApp to send a reply"}><span><Button disabled>Send</Button></span></Tooltip>}
+        </div>
       </div>
     </div>
   );

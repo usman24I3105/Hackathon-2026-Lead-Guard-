@@ -11,6 +11,7 @@ export function SearchBox({
   loading,
   onSelect,
   autoFocus,
+  shortcutHint = false,
 }: {
   query: string;
   onQueryChange: (q: string) => void;
@@ -18,11 +19,13 @@ export function SearchBox({
   loading: boolean;
   onSelect: (result: SearchResult) => void;
   autoFocus?: boolean;
+  shortcutHint?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const wrapRef = useRef<HTMLDivElement>(null);
   const listId = useId();
+  const shortcutLabel = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ K" : "Ctrl K";
   const close = useCallback(() => setOpen(false), []);
   useDismiss(open, wrapRef, close);
 
@@ -43,6 +46,7 @@ export function SearchBox({
         id={`${listId}-input`}
         type="search"
         role="combobox"
+        aria-keyshortcuts="Control+K Meta+K"
         aria-expanded={showList}
         aria-controls={listId}
         aria-autocomplete="list"
@@ -72,8 +76,9 @@ export function SearchBox({
             setOpen(false);
           }
         }}
-        className="w-full h-10 pl-10 pr-3 rounded-control bg-neutral-bg border border-transparent text-sm text-text placeholder:text-text-muted focus-visible:bg-surface focus-visible:border-primary transition-colors"
+        className={"w-full h-10 pl-10 rounded-control bg-neutral-bg border border-transparent text-sm text-text placeholder:text-text-muted focus-visible:bg-surface focus-visible:border-primary transition-colors " + (shortcutHint ? "pr-16" : "pr-3")}
       />
+      {shortcutHint && <kbd aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] text-text-muted">{shortcutLabel}</kbd>}
       <div aria-live="polite" className="sr-only">
         {showList && !loading ? `${items.length} result${items.length === 1 ? "" : "s"}` : ""}
       </div>

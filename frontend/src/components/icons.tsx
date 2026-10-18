@@ -1,10 +1,12 @@
-import { useId, type ReactNode, type SVGProps } from "react";
+import type { ReactNode, SVGProps } from "react";
 
 export type IconName =
   | "dashboard" | "leads" | "recovery" | "pipeline" | "contacts" | "integrations"
   | "companies" | "opportunities" | "message" | "payments" | "calendar" | "team" | "activity"
   | "audit" | "settings" | "search" | "menu" | "close" | "chevron-down" | "logout" | "check"
-  | "sun" | "moon" | "plus" | "command" | "chevron-left" | "arrow-right" | "play" | "shield";
+  | "sun" | "moon" | "plus" | "command" | "chevron-left" | "arrow-right" | "play" | "shield"
+  | "bell" | "list" | "history" | "phone" | "copy" | "more" | "info" | "filter" | "clock" | "warning" | "inbox"
+  | "lock" | "arrow-up-right" | "mail";
 
 const PATHS: Record<IconName, ReactNode> = {
   dashboard: (
@@ -110,9 +112,23 @@ const PATHS: Record<IconName, ReactNode> = {
     <path d="M9 7V5a2 2 0 1 0-2 2h10a2 2 0 1 0-2-2v14a2 2 0 1 0 2-2H7a2 2 0 1 0 2 2V7z" />
   </>,
   "chevron-left": <path d="m15 18-6-6 6-6" />,
-  "arrow-right": <path d="M5 12h14M12 5l7 7-7 7" />,
-  play: <polygon points="6 3 20 12 6 21 6 3" />,
-  shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+  "arrow-right": <path d="M5 12h14m-6-6 6 6-6 6" />,
+  play: <path d="m8 5 12 7-12 7V5z" />,
+  bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
+  list: <><path d="M9 6h12M9 12h12M9 18h12" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></>,
+  history: <><path d="M3 12a9 9 0 1 0 2.7-6.4L3 8" /><path d="M3 3v5h5M12 7v5l3 2" /></>,
+  phone: <path d="M7 3H5a2 2 0 0 0-2 2c0 8.8 7.2 16 16 16a2 2 0 0 0 2-2v-2l-5-2-2 2a14 14 0 0 1-6-6l2-2-3-5z" />,
+  copy: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></>,
+  more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
+  info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>,
+  filter: <><path d="M4 6h16M7 12h10M10 18h4" /><circle cx="8" cy="6" r="1.5" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="12" cy="18" r="1.5" fill="currentColor" stroke="none" /></>,
+  clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+  warning: <><path d="m12 3 9 16H3l9-16z" /><path d="M12 9v4M12 16h.01" /></>,
+  inbox: <><path d="M4 4h16l2 10v5H2v-5L4 4z" /><path d="M2 14h5l2 3h6l2-3h5" /></>,
+  lock: <><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 1 1 8 0v3" /><path d="M12 14v3" /></>,
+  "arrow-up-right": <><path d="M7 17 17 7M8 7h9v9" /></>,
+  mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></>,
+  shield: <><path d="M12 3 19 6v5c0 4.7-2.8 8-7 10-4.2-2-7-5.3-7-10V6l7-3z" /><path d="m9 12 2 2 4-4" /></>,
 };
 
 /** Decorative by default (aria-hidden); pass `label` for a standalone meaningful icon. */
@@ -138,18 +154,9 @@ export function Icon({ name, size = 20, label, ...rest }: { name: IconName; size
 }
 
 export function ShieldLogo({ size = 28 }: { size?: number }) {
-  const gradientId = `leadguard-shield-${useId().replaceAll(":", "")}`;
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <defs>
-        <linearGradient id={gradientId} x1="5" y1="3" x2="27" y2="29" gradientUnits="userSpaceOnUse">
-          <stop stopColor="var(--gradient-start)" />
-          <stop offset=".55" stopColor="var(--gradient-middle)" />
-          <stop offset="1" stopColor="var(--gradient-end)" />
-        </linearGradient>
-      </defs>
-      <path d="M16 2.5 27 6.8v8.4c0 6.9-4.6 12.1-11 14.3C9.6 27.3 5 22.1 5 15.2V6.8L16 2.5z" fill={`url(#${gradientId})`} />
-      <path d="m11 16 3.5 3.5L21.5 12" fill="none" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return <img src="/leadguard-mark.png" width={size} height={size} alt="" aria-hidden="true" className="brand-mark" />;
+}
+
+export function BrandLockup({ className = "" }: { className?: string }) {
+  return <img src="/leadguard-lockup.png" alt="LeadGuard CRM" className={`brand-lockup ${className}`} />;
 }

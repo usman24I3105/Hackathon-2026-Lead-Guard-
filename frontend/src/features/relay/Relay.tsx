@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { useStoreState, useRealtimeEvent, store } from "../../state/useStore";
 import { useToast } from "../../state/ToastContext";
 import { Button } from "../../components/Primitives";
@@ -11,6 +11,7 @@ import { ManualLeadModal } from "./ManualLeadModal";
 import type { Lead } from "../../mock/types";
 import { useAuth } from "../../state/AuthContext";
 import { has } from "../../lib/perm";
+import { RelayErrorState, RelayLoadingState } from "./RelayUi";
 import "./relay.css";
 
 type QueueView = "attention" | "acknowledged";
@@ -25,6 +26,13 @@ export default function Relay() {
   const [announce, setAnnounce] = useState("");
   const [queueView, setQueueView] = useState<QueueView>("attention");
   const [query, setQuery] = useState("");
+  const tabRefs = useRef<Record<QueueView, HTMLButtonElement | null>>({ attention: null, acknowledged: null });
+  const previewState = import.meta.env.DEV && typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("relayState")
+    : null;
+  const [stateOverride, setStateOverride] = useState<"loading" | "error" | null>(
+    previewState === "loading" || previewState === "error" ? previewState : null
+  );
   const canManage = !session || has({ role: session.role }, "leads.manage");
   const previewMode = import.meta.env.DEV || import.meta.env.VITE_API_MODE === "mock";
 
@@ -63,19 +71,41 @@ export default function Relay() {
   const availableCount = team.filter((member) => member.availability === "available").length;
   const escalatedCount = attention.filter((lead) => lead.status === "escalated").length;
 
+  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const order: QueueView[] = ["attention", "acknowledged"];
+    const currentIndex = order.indexOf(queueView);
+    const nextIndex = event.key === "ArrowRight"
+      ? (currentIndex + 1) % order.length
+      : event.key === "ArrowLeft"
+        ? (currentIndex - 1 + order.length) % order.length
+        : event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? order.length - 1
+            : -1;
+    if (nextIndex >= 0) {
+      event.preventDefault();
+      const next = order[nextIndex];
+      setQueueView(next);
+      tabRefs.current[next]?.focus();
+    }
+  }
+
   return (
     <div className="relay-page">
       <header className="relay-header">
         <div className="relay-heading">
-          <p className="relay-eyebrow">Lead operations</p>
+          <p className="relay-eyebrow">Customer management <span aria-hidden="true">/</span> Live relay</p>
           <div className="relay-heading-row">
-            <div>
-              <h1>Relay</h1>
+            <div className="relay-title-copy">
+              <div className="relay-title-line">
+                <h1>Relay</h1>
+                <div className={`relay-live-state ${attention.length ? "is-active" : "is-quiet"}`} role="status">
+                  <span className="relay-live-dot" aria-hidden="true" />
+                  <span>{attention.length ? `${attention.length} need attention` : "All leads accounted for"}</span>
+                </div>
+              </div>
               <p className="relay-subtitle">Every enquiry has an owner, a response window, and a clear next step.</p>
-            </div>
-            <div className={`relay-live-state ${attention.length ? "is-active" : "is-quiet"}`}>
-              <span className="relay-live-dot" aria-hidden="true" />
-              {attention.length ? `${attention.length} need attention` : "All leads accounted for"}
             </div>
           </div>
         </div>
@@ -95,66 +125,145 @@ export default function Relay() {
 
       <div aria-live="polite" className="sr-only">{announce}</div>
 
-      <div className="relay-summary" aria-label="Relay overview">
-        <div><strong>{attention.length}</strong><span>Open leads</span></div>
-        <div><strong className={escalatedCount ? "has-warning" : ""}>{escalatedCount}</strong><span>Escalated</span></div>
-        <div><strong>{availableCount}<small> / {team.length}</small></strong><span>Available now</span></div>
-      </div>
-
-      <TeamStrip />
-
-      {showcase && <LeadTrack lead={showcase} />}
-
-      <section className="relay-queue" aria-labelledby="relay-queue-title">
-        <div className="relay-queue-heading">
-          <div>
-            <h2 id="relay-queue-title">Lead queue</h2>
-            <p>Review the next response and keep ownership clear.</p>
-          </div>
-          <label className="relay-search">
-            <Icon name="search" size={17} />
-            <span className="sr-only">Search lead queue</span>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a lead" />
-            {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search"><Icon name="close" size={15} /></button>}
-          </label>
-        </div>
-
-        <div className="relay-queue-controls">
-          <div className="relay-filter-group" role="group" aria-label="Filter lead queue">
-            <button type="button" aria-pressed={queueView === "attention"} onClick={() => setQueueView("attention")}>
-              Needs attention <span>{attention.length}</span>
-            </button>
-            <button type="button" aria-pressed={queueView === "acknowledged"} onClick={() => setQueueView("acknowledged")}>
-              Acknowledged <span>{acknowledged.length}</span>
-            </button>
-          </div>
-          <p className="relay-results-count" aria-live="polite">
-            {visibleLeads.length} {visibleLeads.length === 1 ? "lead" : "leads"}
-            {normalizedQuery ? ` matching “${query.trim()}”` : queueView === "attention" ? " in this queue" : " acknowledged"}
-          </p>
-        </div>
-
-        {visibleLeads.length ? (
-          <ul className="relay-lead-list">
-            {visibleLeads.map((lead) => (
-              <LeadCard key={lead.id} lead={lead} highlight={highlightId === lead.id} onOpenTimeline={() => setDrawerLead(lead)} />
-            ))}
-          </ul>
-        ) : (
-          <div className="relay-empty-state">
-            <div className="relay-empty-icon"><Icon name={normalizedQuery ? "search" : queueView === "attention" ? "check" : "activity"} size={20} /></div>
-            <div>
-              <h3>{normalizedQuery ? "No leads match that search" : queueView === "attention" ? "No leads need attention" : "No acknowledged leads yet"}</h3>
-              <p>{normalizedQuery ? "Try a different name, phone number, source, or message." : queueView === "attention" ? "New enquiries will appear here with an owner and response timer." : "Acknowledged leads will appear here once the team responds."}</p>
+      {stateOverride === "loading" ? <RelayLoadingState /> : stateOverride === "error" ? (
+        <RelayErrorState onRetry={() => setStateOverride(null)} />
+      ) : (
+        <>
+          <section className="relay-summary" aria-label="Relay overview">
+            <div className="relay-stat is-info">
+              <div className="relay-stat-heading">
+                <span className="relay-stat-icon"><Icon name="inbox" size={16} /></span>
+                <span className="relay-stat-label">Needs response</span>
+              </div>
+              <strong>{attention.length}</strong>
+              <span className="relay-stat-helper" title="Leads still moving through relay">Leads still moving through relay</span>
             </div>
-            {normalizedQuery ? (
-              <Button variant="tertiary" onClick={() => setQuery("")}>Clear search</Button>
-            ) : queueView === "attention" && canManage ? (
-              <Button variant="secondary" onClick={() => setManualOpen(true)}><Icon name="plus" size={15} /> Add a lead</Button>
-            ) : null}
-          </div>
-        )}
-      </section>
+            <div className={`relay-stat is-danger${escalatedCount > 0 ? " has-value" : ""}`}>
+              <div className="relay-stat-heading">
+                <span className="relay-stat-icon"><Icon name="clock" size={16} /></span>
+                <span className="relay-stat-label">Past due</span>
+              </div>
+              <strong>{escalatedCount}</strong>
+              <span className="relay-stat-helper" title="Escalation happens automatically">Escalation happens automatically</span>
+            </div>
+            <div className="relay-stat is-success">
+              <div className="relay-stat-heading">
+                <span className="relay-stat-icon"><Icon name="team" size={16} /></span>
+                <span className="relay-stat-label">Ready now</span>
+              </div>
+              <strong>{availableCount}<small> / {team.length}</small></strong>
+              <span className="relay-capacity-pips" role="img" aria-label={`${availableCount} of ${team.length} teammates available`}>
+                {[0, 1, 2, 3].map((segment) => <span key={segment} className={segment < availableCount ? "is-filled" : ""} aria-hidden="true" />)}
+              </span>
+              <span className="relay-stat-helper" title="Teammates available to respond">Teammates available to respond</span>
+            </div>
+          </section>
+
+          <TeamStrip />
+          {showcase && <LeadTrack lead={showcase} />}
+
+          <section className="relay-queue" aria-labelledby="relay-queue-title">
+            <div className="relay-queue-heading">
+              <div>
+                <h2 id="relay-queue-title">Lead queue</h2>
+                <p>Review new enquiries and keep the next response moving.</p>
+              </div>
+              <label className="relay-search">
+                <Icon name="search" size={17} />
+                <span className="sr-only">Search lead queue</span>
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, phone or message" />
+                {query && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    iconOnly
+                    className="relay-search-clear"
+                    aria-label="Clear lead search"
+                    title="Clear search"
+                    onClick={() => setQuery("")}
+                  ><Icon name="close" size={15} /></Button>
+                )}
+              </label>
+            </div>
+
+            <div className="relay-queue-controls">
+              <div className="relay-filter-group" role="tablist" aria-label="Lead queue views" aria-orientation="horizontal">
+                <button
+                  ref={(node) => { tabRefs.current.attention = node; }}
+                  id="relay-tab-attention"
+                  type="button"
+                  role="tab"
+                  aria-selected={queueView === "attention"}
+                  aria-controls="relay-queue-panel"
+                  tabIndex={queueView === "attention" ? 0 : -1}
+                  onClick={() => setQueueView("attention")}
+                  onKeyDown={onTabKeyDown}
+                >
+                  Needs attention <span>{attention.length}</span>
+                </button>
+                <button
+                  ref={(node) => { tabRefs.current.acknowledged = node; }}
+                  id="relay-tab-acknowledged"
+                  type="button"
+                  role="tab"
+                  aria-selected={queueView === "acknowledged"}
+                  aria-controls="relay-queue-panel"
+                  tabIndex={queueView === "acknowledged" ? 0 : -1}
+                  onClick={() => setQueueView("acknowledged")}
+                  onKeyDown={onTabKeyDown}
+                >
+                  Acknowledged <span>{acknowledged.length}</span>
+                </button>
+              </div>
+              <p className="relay-results-count" aria-live="polite">
+                Showing {visibleLeads.length} of {source.length}
+              </p>
+            </div>
+
+            <div id="relay-queue-panel" role="tabpanel" aria-labelledby={queueView === "attention" ? "relay-tab-attention" : "relay-tab-acknowledged"} tabIndex={0}>
+              {visibleLeads.length ? (
+                <div className="relay-lead-table" role="table" aria-label="Lead queue">
+                  <div className="relay-lead-table-head" role="rowgroup">
+                    <div className="relay-lead-table-row" role="row">
+                      <span role="columnheader">Lead</span>
+                      <span role="columnheader">Source</span>
+                      <span role="columnheader">Message</span>
+                      <span role="columnheader">Owner</span>
+                      <span role="columnheader">Response</span>
+                      <span role="columnheader" className="is-actions">Actions</span>
+                    </div>
+                  </div>
+                  <ul className="relay-lead-list" role="rowgroup">
+                  {visibleLeads.map((lead) => (
+                    <LeadCard
+                      key={lead.id}
+                      lead={lead}
+                      highlight={highlightId === lead.id}
+                      onOpenTimeline={() => setDrawerLead(lead)}
+                      onAcknowledged={() => setQueueView("acknowledged")}
+                    />
+                  ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="relay-empty-state">
+                  <div className="relay-empty-icon"><Icon name={normalizedQuery ? "search" : queueView === "attention" ? "check" : "history"} size={20} /></div>
+                  <div className="relay-empty-copy">
+                    <h3>{normalizedQuery ? "No leads match that search" : queueView === "attention" ? "You’re all caught up" : "Nothing acknowledged yet"}</h3>
+                    <p>{normalizedQuery ? "Try a different name, phone number, source, or message." : queueView === "attention" ? "New enquiries arrive here with an owner and a response timer." : "Leads move here as soon as someone acknowledges them."}</p>
+                  </div>
+                  {normalizedQuery ? (
+                    <Button variant="secondary" size="md" onClick={() => setQuery("")}>Clear search</Button>
+                  ) : queueView === "attention" && canManage ? (
+                    <Button variant="secondary" onClick={() => setManualOpen(true)}><Icon name="plus" size={15} /> Add a lead</Button>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </section>
+        </>
+      )}
 
       <TimelineDrawer lead={drawerLead} onClose={() => setDrawerLead(null)} />
       <ManualLeadModal open={manualOpen} onClose={() => setManualOpen(false)} />

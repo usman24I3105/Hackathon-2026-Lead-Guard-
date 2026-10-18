@@ -2,9 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/leadguard-mark.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LeadGuard</title>
+    <meta name="theme-color" content="#f8fafc" />
+    <meta name="description" content="LeadGuard gives every enquiry a clear owner, a response window, and a next step." />
+    <title>LeadGuard — Every lead gets a next step</title>
     <script>
       try {
         const savedTheme = localStorage.getItem("leadguard-theme");
@@ -13,6 +15,7 @@
           : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
         document.documentElement.dataset.theme = resolvedTheme;
         document.documentElement.style.colorScheme = resolvedTheme;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute("content", resolvedTheme === "dark" ? "#121212" : "#f8fafc");
       } catch {}
     </script>
   </head>

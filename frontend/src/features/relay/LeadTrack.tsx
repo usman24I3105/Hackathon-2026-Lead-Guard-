@@ -1,9 +1,9 @@
 import type { CSSProperties } from "react";
 import { Avatar } from "../../components/Avatar";
 import { CountdownRing } from "../../components/CountdownRing";
-import { StatusChip } from "../../components/StatusChip";
 import { useStoreState } from "../../state/useStore";
 import type { Lead } from "../../mock/types";
+import { RelayStatusBadge } from "./RelayUi";
 
 export function LeadTrack({ lead }: { lead: Lead }) {
   const { team } = useStoreState();
@@ -24,7 +24,7 @@ export function LeadTrack({ lead }: { lead: Lead }) {
           <div className="relay-handoff-label">
             <span className="relay-live-dot" aria-hidden="true" />
             <span>Live handoff</span>
-            <StatusChip kind={isEscalated ? "escalated" : "waiting"} />
+            <RelayStatusBadge status={isEscalated ? "escalated" : "waiting"} />
           </div>
           <h2 id="relay-handoff-title">{lead.name}</h2>
           <p>{lead.source} enquiry <span aria-hidden="true">·</span> {owner ? `Owned by ${owner.name}` : "Owner not assigned"}</p>
